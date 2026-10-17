@@ -1,183 +1,145 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { users, roles } from '../data/mockData';
-import { Shield, Eye, EyeOff, LogIn, Building2 } from 'lucide-react';
-
-// Mots de passe simulés pour la démo (ne jamais faire ça en prod)
-const DEMO_PASSWORDS = {
-  'u_superadmin':   'superadmin123',
-  'u_admin_soc1':   'admin123',
-  'u_admin_soc2':   'admin123',
-  'u_admin_soc3':   'admin123',
-  'u_dg_soc1':      'dg123',
-  'u_mgr_fin':      'manager123',
-  'u_mgr_ops':      'manager123',
-  'u_rh_soc1':      'rh123',
-  'u_emp_001':      'employe123',
-  'u_emp_002':      'employe123',
-  'u_emp_003':      'employe123',
-  'u_emp_004':      'employe123',
-  'u_audit':        'audit123',
-};
-
-function getRoleColor(roleId) {
-  return roles.find(r => r.id === roleId)?.color || '#64748b';
-}
-function getRoleLabel(roleId) {
-  return roles.find(r => r.id === roleId)?.label || roleId;
-}
+import { Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, Check } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
 
-  // Sélection du compte démo
-  const [selectedUserId, setSelectedUserId] = useState('u_superadmin');
-  const [password, setPassword]             = useState('');
-  const [showPwd, setShowPwd]               = useState(false);
-  const [error, setError]                   = useState('');
-  const [loading, setLoading]               = useState(false);
-
-  const selectableUsers = users.filter(u =>
-    u.status !== 'exited' && u.status !== 'archived'
-  );
+  const [email,    setEmail]    = useState('superadmin@gescodo.ci');
+  const [password, setPassword] = useState('');
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!email.trim()) { setError("L'adresse email est requise."); return; }
+    if (!password)     { setError('Le mot de passe est requis.'); return; }
+
     setLoading(true);
-
-    await new Promise(r => setTimeout(r, 600)); // Simule un appel réseau
-
-    const expected = DEMO_PASSWORDS[selectedUserId];
-    if (!password) {
-      setError('Veuillez saisir votre mot de passe.');
+    try {
+      await login(email.trim(), password);
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      if (err?.response?.status === 401) {
+        setError(detail || 'Email ou mot de passe incorrect.');
+      } else if (err?.response?.status === 403) {
+        setError(detail || 'Compte suspendu ou inaccessible.');
+      } else if (!navigator.onLine) {
+        setError('Impossible de joindre le serveur. Vérifiez votre connexion.');
+      } else {
+        setError(detail || 'Une erreur est survenue. Veuillez réessayer.');
+      }
+    } finally {
       setLoading(false);
-      return;
     }
-    if (password !== expected) {
-      setError('Mot de passe incorrect.');
-      setLoading(false);
-      return;
-    }
-
-    const ok = login(selectedUserId);
-    if (!ok) {
-      setError('Compte suspendu ou inaccessible.');
-    }
-    setLoading(false);
   };
-
-  const selectedUser = users.find(u => u.id === selectedUserId);
 
   return (
     <div className="login-page">
-      <div className="login-bg-pattern" />
-
-      <div className="login-card">
-        {/* Logo / Titre */}
-        <div className="login-header">
-          <div className="login-logo">
-            <Building2 size={32} />
+      <section className="login-intro" aria-label="Présentation de GESCODO">
+        <div className="login-intro-top">
+          <div className="login-brand">
+            <span className="login-brand-mark">G</span>
+            <span>GESCODO</span>
           </div>
-          <h1 className="login-title">KAB Platform</h1>
-          <p className="login-subtitle">Plateforme professionnelle de communication et de pilotage</p>
+          <span className="login-intro-label">Plateforme de pilotage</span>
         </div>
+        <div className="login-intro-copy">
+          <p className="login-kicker">Un espace de travail maîtrisé</p>
+          <h1>De la décision<br />à l’exécution.</h1>
+          <p>
+            Centralisez les réunions, décisions, tâches et suivis dans un environnement conçu pour les organisations exigeantes.
+          </p>
+        </div>
+        <div className="login-principles">
+          <span><Check size={15} /> Décisions traçables</span>
+          <span><Check size={15} /> Responsabilités claires</span>
+          <span><Check size={15} /> Suivi des échéances</span>
+        </div>
+        <p className="login-intro-footer">Communication interne · Réunions · Pilotage opérationnel</p>
+      </section>
 
-        {/* Formulaire */}
-        <form className="login-form" onSubmit={handleLogin}>
-
-          {/* Sélecteur de compte démo */}
-          <div className="login-field">
-            <label className="login-label">Compte de démonstration</label>
-            <div className="login-account-selector">
-              {selectableUsers.map(u => (
-                <button
-                  key={u.id}
-                  type="button"
-                  className={`login-account-item ${selectedUserId === u.id ? 'selected' : ''}`}
-                  onClick={() => { setSelectedUserId(u.id); setPassword(''); setError(''); }}
-                >
-                  <img src={u.avatar} alt={u.name} className="login-account-avatar" />
-                  <div className="login-account-info">
-                    <span className="login-account-name">{u.name}</span>
-                    <span
-                      className="login-account-role"
-                      style={{ color: getRoleColor(u.role) }}
-                    >
-                      {getRoleLabel(u.role)}
-                    </span>
-                  </div>
-                  {selectedUserId === u.id && (
-                    <div className="login-account-check">✓</div>
-                  )}
-                </button>
-              ))}
-            </div>
+      <section className="login-access">
+        <div className="login-access-panel">
+          <div className="login-access-heading">
+            <span className="login-access-security"><ShieldCheck size={16} /> Accès sécurisé</span>
+            <h2>Bienvenue</h2>
+            <p>Connectez-vous à votre espace professionnel.</p>
           </div>
-
-          {/* Identifiant affiché (readonly) */}
-          {selectedUser && (
-            <div className="login-field">
-              <label className="login-label">Identifiant</label>
-              <input
-                type="text"
-                className="login-input"
-                value={selectedUser.email}
-                readOnly
-                style={{ opacity: 0.6, cursor: 'default' }}
-              />
-            </div>
-          )}
-
-          {/* Mot de passe */}
+          <form className="login-form" onSubmit={handleLogin} noValidate>
           <div className="login-field">
-            <label className="login-label">Mot de passe</label>
+            <label className="login-label" htmlFor="email">
+              Adresse email
+            </label>
+            <input
+              id="email"
+              type="email"
+              className="login-input"
+              placeholder="votre@email.ci"
+              value={email}
+              onChange={e => { setEmail(e.target.value); setError(''); }}
+              autoComplete="email"
+              autoFocus
+              disabled={loading}
+            />
+          </div>
+          <div className="login-field">
+            <label className="login-label" htmlFor="password">
+              Mot de passe
+            </label>
             <div className="login-input-wrap">
               <input
+                id="password"
                 type={showPwd ? 'text' : 'password'}
                 className="login-input"
-                placeholder="Mot de passe"
+                placeholder="••••••••"
                 value={password}
                 onChange={e => { setPassword(e.target.value); setError(''); }}
                 autoComplete="current-password"
+                disabled={loading}
               />
               <button
                 type="button"
                 className="login-eye-btn"
                 onClick={() => setShowPwd(v => !v)}
                 tabIndex={-1}
+                aria-label={showPwd ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
               >
                 {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {/* Indice mot de passe démo */}
-            {selectedUser && (
-              <span className="login-hint">
-                Démo : <code>{DEMO_PASSWORDS[selectedUser.id]}</code>
-              </span>
-            )}
           </div>
-
-          {error && <div className="login-error">{error}</div>}
-
-          <button type="submit" className="login-btn" disabled={loading}>
+          {error && (
+            <div className="login-error" role="alert">
+              <AlertCircle size={14} />
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            className="login-btn"
+            disabled={loading}
+          >
             {loading ? (
               <span className="login-spinner" />
             ) : (
               <>
-                <LogIn size={18} />
-                Se connecter
+                Accéder à mon espace
+                <ArrowRight size={17} />
               </>
             )}
           </button>
         </form>
-
-        {/* Note sécurité */}
         <div className="login-footer">
-          <Shield size={13} />
-          <span>Accès réservé aux collaborateurs autorisés</span>
+          <ShieldCheck size={14} />
+          <span>Réservé aux collaborateurs autorisés</span>
         </div>
-      </div>
+        </div>
+        <p className="login-access-note">GESCODO · Accès professionnel</p>
+      </section>
     </div>
   );
 }

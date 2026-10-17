@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Search, Phone, Video, MoreVertical, Smile, Paperclip,
   Mic, Send, ArrowLeft, BellOff, Trash2, Archive, Pin,
@@ -86,6 +86,8 @@ export default function ChatWindow() {
     setActiveConversationId, togglePin, toggleMute, archiveConversation,
     deleteConversation, addCall, leaveGroup, contacts,
     saveDraft, getDraft, replyingTo, setReplyingTo,
+    currentUser, sendTyping, typingUsers, setMessagingError, setShowSearch,
+    appSettings,
   } = useApp();
 
   const [inputText, setInputText]     = useState('');
@@ -93,10 +95,16 @@ export default function ChatWindow() {
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
+  const fileRef = useRef(null);
+  const recorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const typingTimerRef = useRef(null);
   // @mentions
   const [mentionQuery, setMentionQuery]   = useState(null); // string | null
   const messagesEndRef = useRef(null);
   const inputRef       = useRef(null);
+  const getDraftRef = useRef(getDraft);
+  getDraftRef.current = getDraft;
 
   const conv    = getConversation(activeConversationId);
   const contact = conv ? getContact(conv.contactId) : null;
@@ -104,11 +112,12 @@ export default function ChatWindow() {
   const grouped = groupMessagesByDate(msgs);
   const isGroup = contact?.isGroup;
   const isAnnounce = contact?.channelType === 'annonce';
+  const activeTypers = typingUsers?.[String(activeConversationId)] || [];
 
   // Charger le brouillon quand on change de conversation
   useEffect(() => {
     if (activeConversationId) {
-      const draft = getDraft ? getDraft(activeConversationId) : '';
+      const draft = getDraftRef.current ? getDraftRef.current(activeConversationId) : '';
       setInputText(draft || '');
       inputRef.current?.focus();
     }
@@ -119,26 +128,81 @@ export default function ChatWindow() {
     if (activeConversationId && saveDraft) {
       saveDraft(activeConversationId, inputText);
     }
-  }, [inputText, activeConversationId]);
+  }, [inputText, activeConversationId, saveDraft]);
+
+  useEffect(() => () => {
+    clearTimeout(typingTimerRef.current);
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputText.trim()) return;
-    sendMessage(activeConversationId, inputText.trim(), 'text', replyingTo);
-    setInputText('');
-    setReplyingTo(null);
-    setShowEmojiBar(false);
-    if (saveDraft) saveDraft(activeConversationId, '');
+    const sent = await sendMessage(activeConversationId, inputText.trim(), 'text', replyingTo);
+    if (sent) {
+      setInputText('');
+      setReplyingTo(null);
+      setShowEmojiBar(false);
+      if (saveDraft) saveDraft(activeConversationId, '');
+    }
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const type = file.type.startsWith('image/') ? 'image'
+      : file.type.startsWith('video/') ? 'video'
+        : file.type.startsWith('audio/') ? 'audio' : 'document';
+    const sent = await sendMessage(activeConversationId, inputText.trim(), type, replyingTo, file);
+    if (sent) {
+      setInputText('');
+      setReplyingTo(null);
+    }
+  };
+
+  const startRecording = async (event) => {
+    event.preventDefault();
+    if (recorderRef.current?.state === 'recording') return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorderRef.current = recorder;
+      recorder.ondataavailable = chunkEvent => {
+        if (chunkEvent.data.size) chunks.push(chunkEvent.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+        recorderRef.current = null;
+        setIsRecording(false);
+        const audio = new File(chunks, `voice-message-${Date.now()}.webm`, {
+          type: recorder.mimeType || 'audio/webm',
+        });
+        await sendMessage(activeConversationId, '', 'audio', null, audio);
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      setMessagingError(error.message || 'L’accès au microphone a été refusé.');
+    }
+  };
+
+  const stopRecording = (event) => {
+    event.preventDefault();
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
   };
 
   const handleKeyDown = (e) => {
     if (mentionQuery !== null) {
       if (e.key === 'Escape') { setMentionQuery(null); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && appSettings.chat.enterToSend) {
       e.preventDefault();
       handleSend();
     }
@@ -147,6 +211,13 @@ export default function ChatWindow() {
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInputText(val);
+    sendTyping(activeConversationId, Boolean(val.trim()));
+    clearTimeout(typingTimerRef.current);
+    if (val.trim()) {
+      typingTimerRef.current = setTimeout(
+        () => sendTyping(activeConversationId, false), 1200
+      );
+    }
     // Détecter @mention
     const match = val.match(/@(\w*)$/);
     setMentionQuery(match ? match[1] : null);
@@ -210,7 +281,8 @@ export default function ChatWindow() {
     return '';
   };
 
-  const canWrite = !isAnnounce; // dans un canal annonce, seuls les admins écrivent (simplifié)
+  const canWrite = !isAnnounce
+    || (contact?.admins || []).some(id => String(id) === String(currentUser.id));
 
   return (
     <div className="chat-window">
@@ -232,13 +304,19 @@ export default function ChatWindow() {
               <span className="chat-contact-name">{contact?.name || 'Inconnu'}</span>
               {contact?.channelType === 'annonce' && <span className="channel-type-badge">ANNONCE</span>}
             </div>
-            <span className="chat-contact-status">{getStatusText()}</span>
+            <span className="chat-contact-status">
+              {activeTypers.length ? 'En train d’écrire…' : getStatusText()}
+            </span>
           </div>
         </button>
         <div className="chat-header-actions">
-          <button className="icon-btn" title="Appel vidéo" onClick={() => addCall(conv.contactId, 'video', 'outgoing')}><Video size={20} /></button>
-          <button className="icon-btn" title="Appel vocal"  onClick={() => addCall(conv.contactId, 'voice', 'outgoing')}><Phone size={20} /></button>
-          <button className="icon-btn" title="Rechercher"><Search size={20} /></button>
+          {!isGroup && (
+            <>
+              <button className="icon-btn" title="Appel vidéo" onClick={() => addCall(conv.contactId, 'video', 'outgoing')}><Video size={20} /></button>
+              <button className="icon-btn" title="Appel vocal"  onClick={() => addCall(conv.contactId, 'voice', 'outgoing')}><Phone size={20} /></button>
+            </>
+          )}
+          <button className="icon-btn" title="Rechercher" onClick={() => setShowSearch(true)}><Search size={20} /></button>
           <div className="menu-wrapper">
             <button className="icon-btn" onClick={() => setShowMenu(!showMenu)} title="Plus d'options">
               <MoreVertical size={20} />
@@ -274,7 +352,7 @@ export default function ChatWindow() {
                   key={item.msg.id}
                   msg={item.msg}
                   convId={activeConversationId}
-                  isMine={item.msg.senderId === 'me'}
+                  isMine={String(item.msg.senderId) === String(currentUser.id)}
                   contact={contact?.isGroup ? getContact(item.msg.senderId) : contact}
                   onDelete={(msgId) => deleteMessage(activeConversationId, msgId)}
                 />
@@ -329,7 +407,16 @@ export default function ChatWindow() {
           <button className={`icon-btn emoji-toggle ${showEmojiBar ? 'active' : ''}`} onClick={() => setShowEmojiBar(!showEmojiBar)} title="Emoji">
             <Smile size={22} />
           </button>
-          <button className="icon-btn" title="Joindre un fichier"><Paperclip size={22} /></button>
+          <button className="icon-btn" title="Joindre un fichier" onClick={() => fileRef.current?.click()}>
+            <Paperclip size={22} />
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+            onChange={handleFileChange}
+          />
           {isGroup && (
             <button
               className="icon-btn"
@@ -358,8 +445,9 @@ export default function ChatWindow() {
             <button
               className={`icon-btn ${isRecording ? 'recording' : ''}`}
               title="Message vocal"
-              onMouseDown={() => setIsRecording(true)}
-              onMouseUp={() => setIsRecording(false)}
+              onPointerDown={startRecording}
+              onPointerUp={stopRecording}
+              onPointerLeave={stopRecording}
             >
               <Mic size={22} />
             </button>

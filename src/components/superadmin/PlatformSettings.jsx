@@ -1,280 +1,273 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Save, Shield, Database, Bell, Clock, AlertTriangle, Check } from 'lucide-react';
 import { useSuperAdmin } from '../../context/SuperAdminContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-function SettingField({ label, description, children }) {
+function SettingRow({ label, description, children }) {
   return (
-    <div className="sa-setting-field">
-      <div className="sa-setting-field-label">
-        <span className="sa-setting-label">{label}</span>
-        {description && <span className="sa-setting-desc">{description}</span>}
+    <div className="gc-setting-row">
+      <div className="gc-setting-label-wrap">
+        <span className="gc-setting-label">{label}</span>
+        {description && <span className="gc-setting-desc">{description}</span>}
       </div>
-      <div className="sa-setting-field-input">{children}</div>
+      <div className="gc-setting-control">{children}</div>
     </div>
   );
 }
 
-function ToggleSwitch({ value, onChange }) {
+function Toggle({ value, onChange }) {
   return (
     <button
       type="button"
-      className={`sa-toggle ${value ? 'sa-toggle--on' : ''}`}
+      className={`gc-toggle ${value ? 'gc-toggle--on' : ''}`}
       onClick={() => onChange(!value)}
+      aria-pressed={value}
     >
-      <div className="sa-toggle-thumb" />
+      <span className="gc-toggle-thumb" />
     </button>
   );
 }
 
+function NumberInput({ value, onChange, min, max, unit }) {
+  return (
+    <div className="gc-number-input">
+      <input type="number" min={min} max={max} value={value} onChange={e => onChange(Number(e.target.value))} />
+      {unit && <span className="gc-number-unit">{unit}</span>}
+    </div>
+  );
+}
+
+const DEFAULT_ESCALADE_SETTINGS = {
+  enabled: true,
+  responsable: [-3, -1, 0, 1],
+  manager: [3],
+  directeur: [5],
+};
+
+function formatEscalationDraft(settings = {}) {
+  return {
+    responsable: (Array.isArray(settings.responsable) ? settings.responsable : DEFAULT_ESCALADE_SETTINGS.responsable).join(', '),
+    manager: (Array.isArray(settings.manager) ? settings.manager : DEFAULT_ESCALADE_SETTINGS.manager).join(', '),
+    directeur: (Array.isArray(settings.directeur) ? settings.directeur : DEFAULT_ESCALADE_SETTINGS.directeur).join(', '),
+  };
+}
+
+function parseThresholds(value) {
+  const entries = value.split(',').map(item => item.trim());
+  if (!entries.length || entries.some(item => !/^-?\d+$/.test(item))) return null;
+  return entries.map(Number);
+}
+
 export default function PlatformSettings() {
   const { platformSettings, updatePlatformSettings } = useSuperAdmin();
-  const [form, setForm]   = useState({ ...platformSettings });
+  const [form, setForm] = useState({ ...platformSettings });
+  const [escaladeDraft, setEscaladeDraft] = useState(() => formatEscalationDraft(platformSettings.escaladeSettings));
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  const handleSave = () => {
-    updatePlatformSettings(form);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    setForm({ ...platformSettings });
+    setEscaladeDraft(formatEscalationDraft(platformSettings.escaladeSettings));
+  }, [platformSettings]);
+
+  const handleSave = async () => {
+    const thresholds = {
+      responsable: parseThresholds(escaladeDraft.responsable),
+      manager: parseThresholds(escaladeDraft.manager),
+      directeur: parseThresholds(escaladeDraft.directeur),
+    };
+    if (
+      Object.values(thresholds).some(value => value === null) ||
+      thresholds.manager?.some(day => day < 0) ||
+      thresholds.directeur?.some(day => day < 0)
+    ) {
+      setSaveError('Saisissez des jours entiers séparés par des virgules. Les escalades manager et directeur doivent être à J ou après.');
+      setSaved(false);
+      return;
+    }
+
+    const updatedForm = {
+      ...form,
+      escaladeSettings: {
+        ...form.escaladeSettings,
+        ...thresholds,
+      },
+    };
+    setSaving(true);
+    setSaveError('');
+    try {
+      await updatePlatformSettings(updatedForm);
+      setForm(updatedForm);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (error) {
+      setSaved(false);
+      setSaveError('Impossible d’enregistrer les paramètres. Vérifiez votre connexion puis réessayez.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const field = (key, val) => setForm(p => ({ ...p, [key]: val }));
+  const f = (key, val) => setForm(p => ({ ...p, [key]: val }));
+  const setEscaladeDraftValue = (key, value) => {
+    setEscaladeDraft(current => ({ ...current, [key]: value }));
+    setSaveError('');
+  };
+  const previewThresholds = {
+    responsable: parseThresholds(escaladeDraft.responsable) || [],
+    manager: parseThresholds(escaladeDraft.manager) || [],
+    directeur: parseThresholds(escaladeDraft.directeur) || [],
+  };
 
   return (
-    <div className="sa-page">
+    <div className="gc-page">
 
       {/* Sécurité */}
-      <section className="sa-section sa-card">
-        <div className="sa-card-header">
-          <h3 className="sa-card-title"><Shield size={16} />Sécurité</h3>
+      <section className="gc-section gc-card">
+        <div className="gc-card-header">
+          <h3 className="gc-card-title"><Shield size={15} />Sécurité</h3>
         </div>
-        <div className="sa-settings-list">
-          <SettingField
-            label="Délai d'expiration de session"
-            description="Minutes d'inactivité avant déconnexion automatique."
-          >
-            <div className="sa-number-input">
-              <input
-                type="number" min={5} max={480}
-                value={form.sessionTimeout}
-                onChange={e => field('sessionTimeout', Number(e.target.value))}
-              />
-              <span>min</span>
-            </div>
-          </SettingField>
-
-          <SettingField
-            label="Nombre maximum d'appareils par utilisateur"
-            description="0 = illimité."
-          >
-            <input
-              className="sa-input-sm"
-              type="number" min={0} max={10}
-              value={form.maxDevicesPerUser}
-              onChange={e => field('maxDevicesPerUser', Number(e.target.value))}
-            />
-          </SettingField>
-
-          <SettingField
-            label="Longueur minimum du mot de passe"
-          >
-            <input
-              className="sa-input-sm"
-              type="number" min={6} max={30}
-              value={form.passwordMinLength}
-              onChange={e => field('passwordMinLength', Number(e.target.value))}
-            />
-          </SettingField>
-
-          <SettingField
-            label="Double authentification obligatoire (2FA)"
-            description="Imposer à tous les utilisateurs."
-          >
-            <ToggleSwitch
-              value={form.twoFactorRequired}
-              onChange={v => field('twoFactorRequired', v)}
-            />
-          </SettingField>
-
-          <SettingField
-            label="Blocage automatique des comptes suspects"
-            description="Bloquer après plusieurs tentatives de connexion échouées."
-          >
-            <ToggleSwitch
-              value={form.autoLockSuspectedAccounts}
-              onChange={v => field('autoLockSuspectedAccounts', v)}
-            />
-          </SettingField>
+        <div className="gc-settings-list">
+          <SettingRow label="Délai d'expiration de session" description="Minutes d'inactivité avant déconnexion automatique.">
+            <NumberInput value={form.sessionTimeout} onChange={v => f('sessionTimeout', v)} min={5} max={480} unit="min" />
+          </SettingRow>
+          <SettingRow label="Maximum d'appareils par utilisateur" description="0 = illimité.">
+            <NumberInput value={form.maxDevicesPerUser} onChange={v => f('maxDevicesPerUser', v)} min={0} max={10} />
+          </SettingRow>
+          <SettingRow label="Longueur minimum du mot de passe">
+            <NumberInput value={form.passwordMinLength} onChange={v => f('passwordMinLength', v)} min={6} max={30} />
+          </SettingRow>
+          <SettingRow label="Double authentification (2FA)" description="Imposer à tous les utilisateurs.">
+            <Toggle value={form.twoFactorRequired} onChange={v => f('twoFactorRequired', v)} />
+          </SettingRow>
+          <SettingRow label="Blocage automatique des comptes suspects" description="Bloquer après plusieurs tentatives échouées.">
+            <Toggle value={form.autoLockSuspectedAccounts} onChange={v => f('autoLockSuspectedAccounts', v)} />
+          </SettingRow>
         </div>
       </section>
 
       {/* Documents */}
-      <section className="sa-section sa-card">
-        <div className="sa-card-header">
-          <h3 className="sa-card-title"><Database size={16} />Documents & Fichiers</h3>
+      <section className="gc-section gc-card">
+        <div className="gc-card-header">
+          <h3 className="gc-card-title"><Database size={15} />Documents & Fichiers</h3>
         </div>
-        <div className="sa-settings-list">
-          <SettingField
-            label="Taille maximale de fichier"
-          >
-            <div className="sa-number-input">
-              <input
-                type="number" min={1} max={500}
-                value={form.fileMaxSizeMb}
-                onChange={e => field('fileMaxSizeMb', Number(e.target.value))}
-              />
-              <span>Mo</span>
-            </div>
-          </SettingField>
-
-          <SettingField
-            label="Types de fichiers autorisés"
-            description="Séparés par des virgules."
-          >
+        <div className="gc-settings-list">
+          <SettingRow label="Taille maximale de fichier">
+            <NumberInput value={form.fileMaxSizeMb} onChange={v => f('fileMaxSizeMb', v)} min={1} max={500} unit="Mo" />
+          </SettingRow>
+          <SettingRow label="Types de fichiers autorisés" description="Séparés par des virgules.">
             <input
-              className="sa-input-full"
+              className="gc-input-full"
               type="text"
               value={form.allowedFileTypes.join(', ')}
-              onChange={e => field('allowedFileTypes', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+              onChange={e => f('allowedFileTypes', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
             />
-          </SettingField>
-
-          <SettingField
-            label="Rétention des sauvegardes"
-          >
-            <div className="sa-number-input">
-              <input
-                type="number" min={7} max={3650}
-                value={form.backupRetentionDays}
-                onChange={e => field('backupRetentionDays', Number(e.target.value))}
-              />
-              <span>jours</span>
-            </div>
-          </SettingField>
+          </SettingRow>
+          <SettingRow label="Rétention des sauvegardes">
+            <NumberInput value={form.backupRetentionDays} onChange={v => f('backupRetentionDays', v)} min={7} max={3650} unit="jours" />
+          </SettingRow>
         </div>
       </section>
 
       {/* Maintenance */}
-      <section className="sa-section sa-card">
-        <div className="sa-card-header">
-          <h3 className="sa-card-title"><AlertTriangle size={16} />Maintenance</h3>
+      <section className="gc-section gc-card">
+        <div className="gc-card-header">
+          <h3 className="gc-card-title"><AlertTriangle size={15} />Maintenance</h3>
         </div>
-        <div className="sa-settings-list">
-          <SettingField
-            label="Mode maintenance"
-            description="Bloque l'accès à tous les utilisateurs non-administrateurs."
-          >
-            <ToggleSwitch
-              value={form.maintenanceMode}
-              onChange={v => field('maintenanceMode', v)}
-            />
-          </SettingField>
-          <SettingField label="Version de la plateforme">
+        <div className="gc-settings-list">
+          <SettingRow label="Mode maintenance" description="Bloque l'accès aux utilisateurs non-administrateurs.">
+            <Toggle value={form.maintenanceMode} onChange={v => f('maintenanceMode', v)} />
+          </SettingRow>
+          <SettingRow label="Version de la plateforme">
             <input
-              className="sa-input-sm"
+              className="gc-input-sm"
               type="text"
               value={form.platformVersion}
-              onChange={e => field('platformVersion', e.target.value)}
+              onChange={e => f('platformVersion', e.target.value)}
             />
-          </SettingField>
+          </SettingRow>
         </div>
-
-        <div className="sa-setting-info-row">
+        <div className="gc-setting-info">
           <Clock size={13} />
-          <span>
-            Dernière sauvegarde : {format(new Date(platformSettings.lastBackup), 'd MMM yyyy à HH:mm', { locale: fr })}
-          </span>
+          <span>Dernière sauvegarde : {format(new Date(platformSettings.lastBackup), 'd MMM yyyy à HH:mm', { locale: fr })}</span>
         </div>
       </section>
 
-      {/* ── Escalades ── */}
-      <section className="sa-section sa-card">
-        <div className="sa-card-header">
-          <h3 className="sa-card-title"><Bell size={16} />Seuils de relance et escalade</h3>
+      {/* Escalades */}
+      <section className="gc-section gc-card">
+        <div className="gc-card-header">
+          <h3 className="gc-card-title"><Bell size={15} />Seuils de relance et escalade</h3>
         </div>
-        <p className="sa-setting-desc" style={{ marginBottom: 8, color: '#94a3b8', fontSize: 13 }}>
+        <p className="gc-setting-desc" style={{ marginBottom: 14 }}>
           Jours relatifs à l'échéance d'une tâche (valeurs négatives = avant l'échéance, positives = après).
         </p>
-        <div className="sa-settings-list">
-          <SettingField
-            label="Rappels au Responsable"
-            description="Ex : -3,-1,0,1 → J-3, J-1, J (jour J), J+1"
-          >
+        <div className="gc-settings-list">
+          <SettingRow label="Rappels au Responsable" description="Ex : -3,-1,0,1 → J-3, J-1, J (jour J), J+1">
             <input
-              className="sa-input-full"
+              className="gc-input-full"
               type="text"
-              value={form.escaladeSettings?.responsable?.join(', ') || ''}
-              onChange={e => field('escaladeSettings', {
-                ...form.escaladeSettings,
-                responsable: e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v))
-              })}
+              value={escaladeDraft.responsable}
+              onChange={e => setEscaladeDraftValue('responsable', e.target.value)}
             />
-          </SettingField>
-          <SettingField
-            label="Escalade vers le Manager"
-            description="Nombre de jours après l'échéance"
-          >
+          </SettingRow>
+          <SettingRow label="Escalade vers le Manager" description="Nombre de jours après l'échéance">
             <input
-              className="sa-input-full"
+              className="gc-input-full"
               type="text"
-              value={form.escaladeSettings?.manager?.join(', ') || ''}
-              onChange={e => field('escaladeSettings', {
-                ...form.escaladeSettings,
-                manager: e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v))
-              })}
+              value={escaladeDraft.manager}
+              onChange={e => setEscaladeDraftValue('manager', e.target.value)}
             />
-          </SettingField>
-          <SettingField
-            label="Escalade vers le Directeur"
-            description="Nombre de jours après l'échéance"
-          >
+          </SettingRow>
+          <SettingRow label="Escalade vers le Directeur" description="Nombre de jours après l'échéance">
             <input
-              className="sa-input-full"
+              className="gc-input-full"
               type="text"
-              value={form.escaladeSettings?.directeur?.join(', ') || ''}
-              onChange={e => field('escaladeSettings', {
-                ...form.escaladeSettings,
-                directeur: e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v))
-              })}
+              value={escaladeDraft.directeur}
+              onChange={e => setEscaladeDraftValue('directeur', e.target.value)}
             />
-          </SettingField>
-          <SettingField
-            label="Escalades activées"
-            description="Désactiver pour suspendre toutes les relances automatiques."
-          >
-            <ToggleSwitch
+          </SettingRow>
+          <SettingRow label="Escalades activées" description="Désactiver pour suspendre toutes les relances automatiques.">
+            <Toggle
               value={form.escaladeSettings?.enabled ?? true}
-              onChange={v => field('escaladeSettings', { ...form.escaladeSettings, enabled: v })}
+              onChange={v => f('escaladeSettings', { ...form.escaladeSettings, enabled: v })}
             />
-          </SettingField>
+          </SettingRow>
         </div>
-        <div className="sa-escalade-preview">
-          <span className="sa-escalade-preview-title">Exemple avec les valeurs actuelles :</span>
-          <div className="sa-escalade-timeline">
-            {(form.escaladeSettings?.responsable || []).map(d => (
-              <div key={`r${d}`} className={`sa-escalade-step sa-escalade-step--resp`}>
-                {d >= 0 ? `J+${d}` : `J${d}`}<span>Responsable</span>
-              </div>
-            ))}
-            {(form.escaladeSettings?.manager || []).map(d => (
-              <div key={`m${d}`} className="sa-escalade-step sa-escalade-step--mgr">
-                J+{d}<span>Manager</span>
-              </div>
-            ))}
-            {(form.escaladeSettings?.directeur || []).map(d => (
-              <div key={`dir${d}`} className="sa-escalade-step sa-escalade-step--dir">
-                J+{d}<span>Directeur</span>
-              </div>
-            ))}
-          </div>
+
+        {/* Timeline preview */}
+        <div className="gc-escalade-timeline">
+          <span className="gc-escalade-title">Aperçu :</span>
+          {previewThresholds.responsable.map((d, index) => (
+            <div key={`r${d}-${index}`} className="gc-escalade-step gc-escalade-step--resp">
+              <span>{d >= 0 ? `J+${d}` : `J${d}`}</span>
+              <small>Responsable</small>
+            </div>
+          ))}
+          {previewThresholds.manager.map((d, index) => (
+            <div key={`m${d}-${index}`} className="gc-escalade-step gc-escalade-step--mgr">
+              <span>J+{d}</span>
+              <small>Manager</small>
+            </div>
+          ))}
+          {previewThresholds.directeur.map((d, index) => (
+            <div key={`dir${d}-${index}`} className="gc-escalade-step gc-escalade-step--dir">
+              <span>J+{d}</span>
+              <small>Directeur</small>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Bouton save sticky */}
-      <div className="sa-settings-save-bar">
-        <button className={`sa-btn sa-btn--primary ${saved ? 'sa-btn--saved' : ''}`} onClick={handleSave}>
-          {saved ? <><Check size={15} /> Enregistré</> : <><Save size={15} /> Enregistrer les modifications</>}
+      {/* Save bar */}
+      <div className="gc-save-bar">
+        {saveError && <span className="gc-setting-desc" role="alert">{saveError}</span>}
+        <button className={`gc-btn gc-btn--primary ${saved ? 'gc-btn--saved' : ''}`} onClick={handleSave} disabled={saving}>
+          {saved
+            ? <><Check size={15} /> Enregistré avec succès</>
+            : <><Save size={15} /> {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</>
+          }
         </button>
       </div>
     </div>

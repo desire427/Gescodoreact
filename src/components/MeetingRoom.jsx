@@ -24,7 +24,7 @@ const PV_COLORS  = { draft: '#64748b', submitted: '#3b82f6', validated: '#22c55e
 
 // ── Fil de discussion interne de la réunion ───────────────────────────────────
 function MeetingDiscussion({ meeting }) {
-  const { getMeetingMessages, sendMeetingMessage, contacts } = useApp();
+  const { getMeetingMessages, sendMeetingMessage, contacts, currentUser } = useApp();
   const msgs    = getMeetingMessages(meeting.id);
   const [text, setText] = useState('');
   const endRef  = useRef(null);
@@ -38,7 +38,7 @@ function MeetingDiscussion({ meeting }) {
   };
 
   const getParticipantInfo = (userId) => {
-    if (userId === 'me') return { name: 'Moi', avatar: null };
+    if (String(userId) === String(currentUser.id)) return { name: 'Moi', avatar: null };
     return contacts.find(c => c.id === userId) || { name: userId, avatar: null };
   };
 
@@ -56,7 +56,7 @@ function MeetingDiscussion({ meeting }) {
           </div>
         )}
         {msgs.map(msg => {
-          const isMine = msg.senderId === 'me';
+          const isMine = String(msg.senderId) === String(currentUser.id);
           const sender = getParticipantInfo(msg.senderId);
           return (
             <div key={msg.id} className={`mr-msg-row ${isMine ? 'mine' : 'theirs'}`}>

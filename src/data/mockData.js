@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  DONNÉES MOCKÉES — Plateforme KAB
-//  Rôles : superAdmin | adminSociete | directeurGeneral | manager | employe | auditeur | rh | chefProjet
+//  Rôles : superAdmin | adminSociete | manager | employe | auditeur | rh | chefProjet
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ─── SOCIÉTÉS ───────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ export const roles = [
   },
   {
     id: 'adminSociete',
-    label: 'Administrateur Société / DG',
+    label: 'Administrateur Société',
     color: '#2563eb',
     icon: 'ShieldCheck',
     description: 'Administrateur de sa société ET Directeur Général : gestion des utilisateurs, groupes, services, décisions, rapports, escalades et validation.',
@@ -155,7 +155,7 @@ export const users = [
     twoFactorEnabled: true,
   },
 
-  // ── Administrateurs Société / DG (rôle fusionné) ─────────────────────────
+  // ── Administrateurs Société ─────────────────────────────────────────────
   {
     id: 'u_admin_soc1',
     matricule: 'KABI-ADM-001',
@@ -243,7 +243,7 @@ export const users = [
       { id: 'dev6', type: 'web', os: 'macOS 14', label: 'MacBook Air', firstSeen: new Date('2023-06-01'), lastActive: new Date(Date.now() - 1000 * 60 * 60), active: false, approved: true },
     ],
     sessions: ['sess_dg_soc1'],
-    about: 'Administrateur Société / DG KAB Industries.',
+    about: 'Administrateur Société KAB Industries.',
     twoFactorEnabled: true,
   },
 

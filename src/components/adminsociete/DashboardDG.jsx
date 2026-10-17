@@ -82,7 +82,7 @@ export default function DashboardDG({ onNavigate }) {
     <div className="sa-dashboard">
       {/* ── KPIs principaux ── */}
       <section className="sa-section">
-        <h2 className="sa-section-title">Vue d'ensemble — {format(now, 'd MMMM yyyy', { locale: fr })}</h2>
+        <h2 className="sa-section-title">Vue de l'Administrateur Société — {format(now, 'd MMMM yyyy', { locale: fr })}</h2>
         <div className="sa-kpi-grid">
           <KpiCard icon={Users}       label="Utilisateurs actifs" color="#2563eb"
             value={stats.activeUsers}  sub={`${stats.onlineUsers} en ligne`} onClick={() => onNavigate('users')} />

@@ -1,11 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Search, MessageCircle, User } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { messagingApi } from '../services/api';
 import { format } from 'date-fns';
 
 export default function SearchModal() {
-  const { contacts, conversations, messages, setShowSearch, openConversation, createConversation } = useApp();
+  const {
+    currentUser, contacts, conversations, setShowSearch, openConversation, createConversation,
+  } = useApp();
   const [query, setQuery] = useState('');
+  const [authorId, setAuthorId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [attachmentsOnly, setAttachmentsOnly] = useState(false);
+  const [matchedMessages, setMatchedMessages] = useState([]);
+  const { setMessagingError } = useApp();
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -23,18 +32,33 @@ export default function SearchModal() {
       )
     : [];
 
-  // Recherche dans les messages
-  const matchedMessages = query.trim()
-    ? Object.entries(messages).flatMap(([convId, msgs]) =>
-        msgs
-          .filter(
-            (m) =>
-              m.type === 'text' &&
-              m.text.toLowerCase().includes(query.toLowerCase())
-          )
-          .map((m) => ({ ...m, convId }))
-      )
-    : [];
+  useEffect(() => {
+    const hasFilters = authorId || dateFrom || dateTo || attachmentsOnly;
+    if (query.trim().length < 2 && !hasFilters) {
+      setMatchedMessages([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      messagingApi.searchMessages({
+        q: query.trim(),
+        ...(authorId ? { sender: authorId } : {}),
+        ...(dateFrom ? { date_from: dateFrom } : {}),
+        ...(dateTo ? { date_to: dateTo } : {}),
+        ...(attachmentsOnly ? { attachment: true } : {}),
+      })
+        .then(({ data }) => {
+          if (!cancelled) setMatchedMessages(data.results);
+        })
+        .catch(error => {
+          if (!cancelled) setMessagingError(error?.response?.data?.detail || error.message);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, authorId, dateFrom, dateTo, attachmentsOnly, setMessagingError]);
 
   const handleSelectContact = (contact) => {
     createConversation(contact.id);
@@ -42,7 +66,7 @@ export default function SearchModal() {
   };
 
   const handleSelectMessage = (msg) => {
-    openConversation(msg.convId);
+    openConversation(msg.conversationId);
     setShowSearch(false);
   };
 
@@ -58,7 +82,7 @@ export default function SearchModal() {
             <input
               ref={inputRef}
               type="text"
-              placeholder="Rechercher dans WhatsApp"
+              placeholder="Rechercher dans la messagerie"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="search-modal-input"
@@ -71,8 +95,22 @@ export default function SearchModal() {
           </div>
         </div>
 
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 18px 12px' }}>
+          <select aria-label="Filtrer par auteur" value={authorId} onChange={event => setAuthorId(event.target.value)} style={filterStyle}>
+            <option value="">Tous les auteurs</option>
+            {currentUser?.id != null && <option value={currentUser.id}>Moi</option>}
+            {contacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
+          </select>
+          <label style={dateFilterStyle}>Du <input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
+          <label style={dateFilterStyle}>Au <input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
+          <label style={dateFilterStyle}>
+            <input type="checkbox" checked={attachmentsOnly} onChange={event => setAttachmentsOnly(event.target.checked)} />
+            Pièces jointes
+          </label>
+        </div>
+
         <div className="search-results">
-          {!query.trim() && (
+          {!query.trim() && !authorId && !dateFrom && !dateTo && !attachmentsOnly && (
             <div className="search-placeholder">
               <Search size={48} className="search-placeholder-icon" />
               <p>Rechercher des messages, contacts et plus</p>
@@ -112,12 +150,11 @@ export default function SearchModal() {
                 <MessageCircle size={14} /> Messages
               </div>
               {matchedMessages.slice(0, 20).map((m) => {
-                const conv = conversations.find((c) => c.id === m.convId);
+                const conv = conversations.find((c) => String(c.id) === String(m.conversationId));
                 const contact = conv ? getContact(conv.contactId) : null;
-                const highlighted = m.text.replace(
-                  new RegExp(`(${query})`, 'gi'),
-                  '<mark>$1</mark>'
-                );
+                const highlighted = query.trim()
+                  ? highlightQuery(m.text || m.attachment_name || '', query)
+                  : (m.text || m.attachment_name || 'Pièce jointe');
                 return (
                   <button
                     key={m.id}
@@ -134,10 +171,7 @@ export default function SearchModal() {
                     />
                     <div className="search-result-body">
                       <span className="search-result-name">{contact?.name || 'Inconnu'}</span>
-                      <span
-                        className="search-result-preview"
-                        dangerouslySetInnerHTML={{ __html: highlighted }}
-                      />
+                      <span className="search-result-preview">{highlighted}</span>
                     </div>
                     <span className="search-result-time">
                       {format(new Date(m.time), 'HH:mm')}
@@ -149,15 +183,27 @@ export default function SearchModal() {
           )}
 
           {/* Aucun résultat */}
-          {query.trim() &&
+          {(query.trim() || authorId || dateFrom || dateTo || attachmentsOnly) &&
             matchedContacts.length === 0 &&
             matchedMessages.length === 0 && (
               <div className="search-no-results">
-                <p>Aucun résultat pour « {query} »</p>
+                <p>{query.trim() ? `Aucun résultat pour « ${query} »` : 'Aucun message ne correspond à ces filtres.'}</p>
               </div>
             )}
         </div>
       </div>
     </div>
+  );
+}
+
+const filterStyle = { padding: '7px 9px', border: '1px solid #cbd5e1', borderRadius: 7, background: 'var(--wa-panel, #fff)' };
+const dateFilterStyle = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 };
+
+function highlightQuery(text, query) {
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.split(new RegExp(`(${escaped})`, 'gi')).map((part, index) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={index}>{part}</mark>
+      : part
   );
 }

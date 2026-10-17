@@ -8,14 +8,15 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const STATUS_LABELS = { active: 'Active', suspended: 'Suspendue', archived: 'Archivée' };
-const STATUS_COLORS = { active: 'sa-badge--green', suspended: 'sa-badge--red', archived: 'sa-badge--gray' };
+const STATUS_CLASS  = { active: 'gc-badge--success', suspended: 'gc-badge--danger', archived: 'gc-badge--muted' };
 
+/* ── Modal création/édition ── */
 function CompanyModal({ company, onClose, onSave }) {
   const [form, setForm] = useState({
     name:    company?.name    || '',
     code:    company?.code    || '',
     sector:  company?.sector  || '',
-    country: company?.country || 'Côte d\'Ivoire',
+    country: company?.country || "Côte d'Ivoire",
     city:    company?.city    || '',
     address: company?.address || '',
     phone:   company?.phone   || '',
@@ -28,56 +29,60 @@ function CompanyModal({ company, onClose, onSave }) {
     onSave(form);
   };
 
+  const f = (key, val) => setForm(p => ({ ...p, [key]: val }));
+
   return (
-    <div className="sa-modal-overlay" onClick={onClose}>
-      <div className="sa-modal" onClick={e => e.stopPropagation()}>
-        <div className="sa-modal-header">
+    <div className="gc-modal-overlay" onClick={onClose}>
+      <div className="gc-modal" onClick={e => e.stopPropagation()}>
+        <div className="gc-modal-header">
           <h3>{company ? 'Modifier la société' : 'Nouvelle société'}</h3>
-          <button className="sa-icon-btn" onClick={onClose}><X size={18} /></button>
+          <button className="gc-icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
-        <form className="sa-modal-body" onSubmit={handleSubmit}>
-          <div className="sa-form-row">
-            <div className="sa-form-field">
-              <label>Nom de la société *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
+        <form onSubmit={handleSubmit}>
+          <div className="gc-modal-body">
+            <div className="gc-form-row">
+              <div className="gc-form-field">
+                <label>Nom de la société *</label>
+                <input value={form.name} onChange={e => f('name', e.target.value)} required />
+              </div>
+              <div className="gc-form-field gc-form-field--sm">
+                <label>Code *</label>
+                <input value={form.code} onChange={e => f('code', e.target.value.toUpperCase())} maxLength={6} required />
+              </div>
             </div>
-            <div className="sa-form-field sa-form-field--sm">
-              <label>Code *</label>
-              <input value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} maxLength={6} required />
+            <div className="gc-form-field">
+              <label>Secteur d'activité</label>
+              <input value={form.sector} onChange={e => f('sector', e.target.value)} />
+            </div>
+            <div className="gc-form-row">
+              <div className="gc-form-field">
+                <label>Pays</label>
+                <input value={form.country} onChange={e => f('country', e.target.value)} />
+              </div>
+              <div className="gc-form-field">
+                <label>Ville</label>
+                <input value={form.city} onChange={e => f('city', e.target.value)} />
+              </div>
+            </div>
+            <div className="gc-form-field">
+              <label>Adresse</label>
+              <input value={form.address} onChange={e => f('address', e.target.value)} />
+            </div>
+            <div className="gc-form-row">
+              <div className="gc-form-field">
+                <label>Téléphone</label>
+                <input type="tel" value={form.phone} onChange={e => f('phone', e.target.value)} />
+              </div>
+              <div className="gc-form-field">
+                <label>Email</label>
+                <input type="email" value={form.email} onChange={e => f('email', e.target.value)} />
+              </div>
             </div>
           </div>
-          <div className="sa-form-field">
-            <label>Secteur d'activité</label>
-            <input value={form.sector} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} />
-          </div>
-          <div className="sa-form-row">
-            <div className="sa-form-field">
-              <label>Pays</label>
-              <input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} />
-            </div>
-            <div className="sa-form-field">
-              <label>Ville</label>
-              <input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} />
-            </div>
-          </div>
-          <div className="sa-form-field">
-            <label>Adresse</label>
-            <input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
-          </div>
-          <div className="sa-form-row">
-            <div className="sa-form-field">
-              <label>Téléphone</label>
-              <input type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-            </div>
-            <div className="sa-form-field">
-              <label>Email</label>
-              <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-            </div>
-          </div>
-          <div className="sa-modal-footer">
-            <button type="button" className="sa-btn sa-btn--ghost" onClick={onClose}>Annuler</button>
-            <button type="submit" className="sa-btn sa-btn--primary">
-              <Check size={15} /> {company ? 'Enregistrer' : 'Créer'}
+          <div className="gc-modal-footer">
+            <button type="button" className="gc-btn gc-btn--ghost" onClick={onClose}>Annuler</button>
+            <button type="submit" className="gc-btn gc-btn--primary">
+              <Check size={14} /> {company ? 'Enregistrer' : 'Créer'}
             </button>
           </div>
         </form>
@@ -86,20 +91,21 @@ function CompanyModal({ company, onClose, onSave }) {
   );
 }
 
-function ConfirmModal({ message, confirmLabel, confirmClass, onConfirm, onClose }) {
+/* ── Confirm Modal ── */
+export function ConfirmModal({ message, confirmLabel, confirmClass, onConfirm, onClose }) {
   return (
-    <div className="sa-modal-overlay" onClick={onClose}>
-      <div className="sa-modal sa-modal--sm" onClick={e => e.stopPropagation()}>
-        <div className="sa-modal-header">
+    <div className="gc-modal-overlay" onClick={onClose}>
+      <div className="gc-modal gc-modal--sm" onClick={e => e.stopPropagation()}>
+        <div className="gc-modal-header">
           <h3>Confirmation</h3>
-          <button className="sa-icon-btn" onClick={onClose}><X size={18} /></button>
+          <button className="gc-icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
-        <div className="sa-modal-body">
-          <p className="sa-confirm-message">{message}</p>
+        <div className="gc-modal-body">
+          <p className="gc-confirm-msg">{message}</p>
         </div>
-        <div className="sa-modal-footer">
-          <button className="sa-btn sa-btn--ghost" onClick={onClose}>Annuler</button>
-          <button className={`sa-btn ${confirmClass || 'sa-btn--danger'}`} onClick={onConfirm}>
+        <div className="gc-modal-footer">
+          <button className="gc-btn gc-btn--ghost" onClick={onClose}>Annuler</button>
+          <button className={`gc-btn ${confirmClass || 'gc-btn--danger'}`} onClick={onConfirm}>
             {confirmLabel || 'Confirmer'}
           </button>
         </div>
@@ -108,114 +114,99 @@ function ConfirmModal({ message, confirmLabel, confirmClass, onConfirm, onClose 
   );
 }
 
-export { ConfirmModal };
-
+/* ── Main ── */
 export default function Companies() {
   const { companies, users, createCompany, updateCompany, toggleCompanyStatus } = useSuperAdmin();
-
-  const [search, setSearch]       = useState('');
-  const [filter, setFilter]       = useState('all');
-  const [modal, setModal]         = useState(null); // null | { type, data }
-  const [openMenu, setOpenMenu]   = useState(null);
+  const [search, setSearch]     = useState('');
+  const [filter, setFilter]     = useState('all');
+  const [modal, setModal]       = useState(null);
+  const [openMenu, setOpenMenu] = useState(null);
 
   const filtered = companies.filter(c => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
-                        c.code.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === 'all' || c.status === filter;
-    return matchSearch && matchFilter;
+    const match = c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase());
+    return match && (filter === 'all' || c.status === filter);
   });
 
-  const getUserCount = (companyId) => users.filter(u => u.companyId === companyId).length;
+  const getUserCount = (id) => users.filter(u => u.companyId === id).length;
 
   const handleSave = (form) => {
-    if (modal.data) {
-      updateCompany(modal.data.id, form);
-    } else {
-      createCompany(form);
-    }
+    if (modal.data) updateCompany(modal.data.id, form);
+    else createCompany(form);
     setModal(null);
   };
 
+  const FILTERS = [
+    { id: 'all', label: 'Toutes' }, { id: 'active', label: 'Actives' },
+    { id: 'suspended', label: 'Suspendues' }, { id: 'archived', label: 'Archivées' },
+  ];
+
   return (
-    <div className="sa-page">
+    <div className="gc-page">
       {/* Toolbar */}
-      <div className="sa-toolbar">
-        <div className="sa-search-wrap">
-          <Search size={15} className="sa-search-icon" />
+      <div className="gc-toolbar">
+        <div className="gc-search-wrap">
+          <Search size={14} className="gc-search-icon" />
           <input
-            className="sa-search-input"
+            className="gc-search-input"
             placeholder="Rechercher une société…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div className="sa-filter-tabs">
-          {[
-            { id: 'all',       label: 'Toutes' },
-            { id: 'active',    label: 'Actives' },
-            { id: 'suspended', label: 'Suspendues' },
-            { id: 'archived',  label: 'Archivées' },
-          ].map(f => (
+        <div className="gc-filter-pills">
+          {FILTERS.map(f => (
             <button
               key={f.id}
-              className={`sa-filter-tab ${filter === f.id ? 'active' : ''}`}
+              className={`gc-filter-pill ${filter === f.id ? 'gc-filter-pill--active' : ''}`}
               onClick={() => setFilter(f.id)}
-            >
-              {f.label}
-            </button>
+            >{f.label}</button>
           ))}
         </div>
-        <button className="sa-btn sa-btn--primary" onClick={() => setModal({ type: 'form', data: null })}>
-          <Plus size={15} /> Nouvelle société
+        <button className="gc-btn gc-btn--primary" onClick={() => setModal({ type: 'form', data: null })}>
+          <Plus size={14} /> Nouvelle société
         </button>
       </div>
 
-      {/* Grille */}
-      <div className="sa-companies-grid">
-        {filtered.length === 0 && (
-          <p className="sa-empty">Aucune société trouvée.</p>
-        )}
+      {/* Count */}
+      <p className="gc-count">{filtered.length} société{filtered.length > 1 ? 's' : ''}</p>
+
+      {/* Grid */}
+      <div className="gc-companies-grid">
+        {filtered.length === 0 && <p className="gc-empty">Aucune société trouvée.</p>}
         {filtered.map(company => (
-          <div key={company.id} className="sa-company-card">
-            <div className="sa-company-card-header">
-              <div className="sa-company-logo">
-                <Building2 size={24} />
+          <div key={company.id} className="gc-company-card">
+            <div className="gc-company-card-head">
+              <div className="gc-company-logo"><Building2 size={22} /></div>
+              <div className="gc-company-info">
+                <span className="gc-company-name">{company.name}</span>
+                <span className="gc-company-code">{company.code}</span>
               </div>
-              <div className="sa-company-main">
-                <span className="sa-company-name">{company.name}</span>
-                <span className="sa-company-code">{company.code}</span>
-              </div>
-              <span className={`sa-badge ${STATUS_COLORS[company.status]}`}>
-                {STATUS_LABELS[company.status]}
-              </span>
+              <span className={`gc-badge ${STATUS_CLASS[company.status]}`}>{STATUS_LABELS[company.status]}</span>
               {/* Menu */}
-              <div className="sa-menu-wrap">
-                <button
-                  className="sa-icon-btn"
-                  onClick={() => setOpenMenu(openMenu === company.id ? null : company.id)}
-                >
-                  <MoreVertical size={16} />
+              <div className="gc-menu-wrap">
+                <button className="gc-icon-btn" onClick={() => setOpenMenu(openMenu === company.id ? null : company.id)}>
+                  <MoreVertical size={15} />
                 </button>
                 {openMenu === company.id && (
                   <>
-                    <div className="sa-menu-backdrop" onClick={() => setOpenMenu(null)} />
-                    <div className="sa-dropdown">
-                      <button className="sa-dropdown-item" onClick={() => { setModal({ type: 'form', data: company }); setOpenMenu(null); }}>
-                        <Edit2 size={14} /> Modifier
+                    <div className="gc-menu-backdrop" onClick={() => setOpenMenu(null)} />
+                    <div className="gc-dropdown">
+                      <button className="gc-dropdown-item" onClick={() => { setModal({ type: 'form', data: company }); setOpenMenu(null); }}>
+                        <Edit2 size={13} /> Modifier
                       </button>
                       {company.status !== 'active' && (
-                        <button className="sa-dropdown-item" onClick={() => { setModal({ type: 'confirm', data: company, action: 'activate' }); setOpenMenu(null); }}>
-                          <CheckCircle size={14} /> Activer
+                        <button className="gc-dropdown-item" onClick={() => { setModal({ type: 'confirm', data: company, action: 'activate' }); setOpenMenu(null); }}>
+                          <CheckCircle size={13} /> Activer
                         </button>
                       )}
                       {company.status === 'active' && (
-                        <button className="sa-dropdown-item sa-dropdown-item--danger" onClick={() => { setModal({ type: 'confirm', data: company, action: 'suspend' }); setOpenMenu(null); }}>
-                          <XCircle size={14} /> Suspendre
+                        <button className="gc-dropdown-item gc-dropdown-item--danger" onClick={() => { setModal({ type: 'confirm', data: company, action: 'suspend' }); setOpenMenu(null); }}>
+                          <XCircle size={13} /> Suspendre
                         </button>
                       )}
                       {company.status !== 'archived' && (
-                        <button className="sa-dropdown-item sa-dropdown-item--danger" onClick={() => { setModal({ type: 'confirm', data: company, action: 'archive' }); setOpenMenu(null); }}>
-                          <Archive size={14} /> Archiver
+                        <button className="gc-dropdown-item gc-dropdown-item--danger" onClick={() => { setModal({ type: 'confirm', data: company, action: 'archive' }); setOpenMenu(null); }}>
+                          <Archive size={13} /> Archiver
                         </button>
                       )}
                     </div>
@@ -224,72 +215,39 @@ export default function Companies() {
               </div>
             </div>
 
-            <div className="sa-company-details">
-              {company.sector && (
-                <div className="sa-company-detail">
-                  <Briefcase size={13} />
-                  <span>{company.sector}</span>
-                </div>
-              )}
-              {company.city && (
-                <div className="sa-company-detail">
-                  <Globe size={13} />
-                  <span>{company.city}, {company.country}</span>
-                </div>
-              )}
-              {company.phone && (
-                <div className="sa-company-detail">
-                  <Phone size={13} />
-                  <span>{company.phone}</span>
-                </div>
-              )}
-              {company.email && (
-                <div className="sa-company-detail">
-                  <Mail size={13} />
-                  <span>{company.email}</span>
-                </div>
-              )}
+            <div className="gc-company-details">
+              {company.sector && <span className="gc-company-detail"><Briefcase size={12} />{company.sector}</span>}
+              {company.city && <span className="gc-company-detail"><Globe size={12} />{company.city}, {company.country}</span>}
+              {company.phone && <span className="gc-company-detail"><Phone size={12} />{company.phone}</span>}
+              {company.email && <span className="gc-company-detail"><Mail size={12} />{company.email}</span>}
             </div>
 
-            <div className="sa-company-footer">
-              <div className="sa-company-stat">
-                <Users size={14} />
-                <span>{getUserCount(company.id)} utilisateurs</span>
-              </div>
-              <span className="sa-company-date">
-                Créée le {format(new Date(company.createdAt), 'd MMM yyyy', { locale: fr })}
+            <div className="gc-company-card-foot">
+              <span className="gc-company-stat"><Users size={13} />{getUserCount(company.id)} utilisateurs</span>
+              <span className="gc-company-date">
+                {format(new Date(company.createdAt), 'd MMM yyyy', { locale: fr })}
               </span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Modals */}
       {modal?.type === 'form' && (
-        <CompanyModal
-          company={modal.data}
-          onClose={() => setModal(null)}
-          onSave={handleSave}
-        />
+        <CompanyModal company={modal.data} onClose={() => setModal(null)} onSave={handleSave} />
       )}
       {modal?.type === 'confirm' && (
         <ConfirmModal
           message={
-            modal.action === 'suspend'
-              ? `Suspendre "${modal.data.name}" ? Tous les accès seront bloqués.`
-              : modal.action === 'archive'
-              ? `Archiver "${modal.data.name}" ? La société sera inaccessible.`
-              : `Activer "${modal.data.name}" ?`
+            modal.action === 'suspend'  ? `Suspendre "${modal.data.name}" ? Tous les accès seront bloqués.` :
+            modal.action === 'archive'  ? `Archiver "${modal.data.name}" ? La société sera inaccessible.` :
+            `Activer "${modal.data.name}" ?`
           }
-          confirmLabel={
-            modal.action === 'suspend' ? 'Suspendre' :
-            modal.action === 'archive' ? 'Archiver'  : 'Activer'
-          }
-          confirmClass={modal.action === 'activate' ? 'sa-btn--primary' : 'sa-btn--danger'}
+          confirmLabel={modal.action === 'suspend' ? 'Suspendre' : modal.action === 'archive' ? 'Archiver' : 'Activer'}
+          confirmClass={modal.action === 'activate' ? 'gc-btn--primary' : 'gc-btn--danger'}
           onClose={() => setModal(null)}
           onConfirm={() => {
-            const statusMap = { suspend: 'suspended', archive: 'archived', activate: 'active' };
-            toggleCompanyStatus(modal.data.id, statusMap[modal.action]);
+            const map = { suspend: 'suspended', archive: 'archived', activate: 'active' };
+            toggleCompanyStatus(modal.data.id, map[modal.action]);
             setModal(null);
           }}
         />

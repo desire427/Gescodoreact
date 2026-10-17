@@ -434,6 +434,55 @@ function TaskDetail({ task, onClose }) {
 }
 
 // ── Page principale Tâches ────────────────────────────────────────────────────
+function KanbanColumn({ column, tasks, users, onSelectTask, onDropTask }) {
+  const [dragOver, setDragOver] = useState(false);
+  const ColumnIcon = column.icon;
+
+  return (
+    <div className="kanban-column" style={{ minWidth: 200, maxWidth: 220 }}
+      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => { setDragOver(false); onDropTask(e, column.id); }}
+    >
+      <div className="kanban-col-header" style={{ '--col-color': column.color }}>
+        <div className="kanban-col-title">
+          <ColumnIcon size={13} style={{ color: column.color }} />
+          <span>{column.label}</span>
+          <span className="kanban-col-count">{tasks.length}</span>
+        </div>
+      </div>
+      <div className={`kanban-col-body ${dragOver ? 'drag-over' : ''}`}>
+        {tasks.map(task => {
+          const priority = PRIO[task.priority] || PRIO.normal;
+          const responsible = users.find(user => user.id === task.responsableId);
+          return (
+            <div key={task.id} className="kanban-card" draggable
+              onDragStart={e => { e.dataTransfer.setData('taskId', task.id); e.dataTransfer.effectAllowed = 'move'; }}
+              onClick={() => onSelectTask(task)}
+            >
+              <div className="kanban-card-header">
+                <span className="kanban-card-ref">{task.ref}</span>
+                <span className="kanban-card-prio" style={{ background: priority.color + '22', color: priority.color }}>{priority.label}</span>
+              </div>
+              <p className="kanban-card-title">{task.title}</p>
+              <div className="kanban-card-footer">
+                <div className="kanban-card-meta"><Users size={10} /><span>{responsible?.name || '—'}</span></div>
+                {task.dueDate && <div className="kanban-card-meta"><Calendar size={10} /><span>{format(new Date(task.dueDate), 'd MMM', { locale: fr })}</span></div>}
+              </div>
+              {(task.progress || 0) > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <div className="sa-progress-bar-wrap"><div className="sa-progress-bar" style={{ width: `${task.progress}%`, background: column.color }} /></div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {tasks.length === 0 && <div className="kanban-col-empty">Vide</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function TasksModule() {
   const { tasks, stats, createTask } = useAdminSociete();
   const [search, setSearch]             = useState('');
@@ -567,54 +616,16 @@ export default function TasksModule() {
       {/* Vue Kanban */}
       {viewMode === 'kanban' && (
         <div className="tasks-kanban-board">
-          {COLUMNS.map(col => {
-            const colTasks = tasks.filter(t => t.status === col.id);
-            const [dragOver, setDragOver] = useState(false);
-            return (
-              <div key={col.id} className="kanban-column"
-                style={{ minWidth:200, maxWidth:220 }}
-                onDragOver={e=>{e.preventDefault();setDragOver(true);}}
-                onDragLeave={()=>setDragOver(false)}
-                onDrop={e=>{setDragOver(false);handleKanbanDrop(e,col.id);}}
-              >
-                <div className="kanban-col-header" style={{ '--col-color':col.color }}>
-                  <div className="kanban-col-title">
-                    <col.icon size={13} style={{ color:col.color }}/>
-                    <span>{col.label}</span>
-                    <span className="kanban-col-count">{colTasks.length}</span>
-                  </div>
-                </div>
-                <div className={`kanban-col-body ${dragOver?'drag-over':''}`}>
-                  {colTasks.map(t => {
-                    const pr = PRIO[t.priority]||PRIO.normal;
-                    const resp = users.find(u=>u.id===t.responsableId);
-                    return (
-                      <div key={t.id} className="kanban-card" draggable
-                        onDragStart={e=>{e.dataTransfer.setData('taskId',t.id);e.dataTransfer.effectAllowed='move';}}
-                        onClick={()=>setSelected(t)}
-                      >
-                        <div className="kanban-card-header">
-                          <span className="kanban-card-ref">{t.ref}</span>
-                          <span className="kanban-card-prio" style={{ background:pr.color+'22', color:pr.color }}>{pr.label}</span>
-                        </div>
-                        <p className="kanban-card-title">{t.title}</p>
-                        <div className="kanban-card-footer">
-                          <div className="kanban-card-meta"><Users size={10}/><span>{resp?.name||'—'}</span></div>
-                          {t.dueDate && <div className="kanban-card-meta"><Calendar size={10}/><span>{format(new Date(t.dueDate),'d MMM',{locale:fr})}</span></div>}
-                        </div>
-                        {(t.progress||0) > 0 && (
-                          <div style={{ marginTop:4 }}>
-                            <div className="sa-progress-bar-wrap"><div className="sa-progress-bar" style={{ width:`${t.progress}%`, background:col.color }}/></div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {colTasks.length===0 && <div className="kanban-col-empty">Vide</div>}
-                </div>
-              </div>
-            );
-          })}
+          {COLUMNS.map(column => (
+            <KanbanColumn
+              key={column.id}
+              column={column}
+              tasks={tasks.filter(task => task.status === column.id)}
+              users={users}
+              onSelectTask={setSelected}
+              onDropTask={handleKanbanDrop}
+            />
+          ))}
         </div>
       )}
 

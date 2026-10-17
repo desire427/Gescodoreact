@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Camera, Edit3, X, ChevronRight, Eye } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Camera, Edit3, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -116,19 +116,22 @@ export default function StatusView() {
   const [newStatusText, setNewStatusText] = useState('');
   const [selectedBg, setSelectedBg] = useState(STATUS_COLORS[0]);
   const [viewingStatus, setViewingStatus] = useState(null);
+  const [statusImage, setStatusImage] = useState(null);
+  const imageRef = useRef(null);
 
-  const myStatus = statuses.find((s) => s.userId === 'me');
-  const othersStatuses = statuses.filter((s) => s.userId !== 'me');
+  const myStatus = statuses.find(s => String(s.userId) === String(currentUser.id));
+  const othersStatuses = statuses.filter(s => String(s.userId) !== String(currentUser.id));
 
   const getContact = (userId) => {
-    if (userId === 'me') return currentUser;
+    if (String(userId) === String(currentUser.id)) return currentUser;
     return contacts.find((c) => c.id === userId);
   };
 
   const handleAddStatus = () => {
-    if (!newStatusText.trim()) return;
-    addStatus(newStatusText.trim(), selectedBg);
+    if (!newStatusText.trim() && !statusImage) return;
+    addStatus(newStatusText.trim(), selectedBg, statusImage);
     setNewStatusText('');
+    setStatusImage(null);
     setShowAddStatus(false);
   };
 
@@ -172,9 +175,20 @@ export default function StatusView() {
         <button className="icon-btn" onClick={() => setShowAddStatus(true)}>
           <Edit3 size={16} />
         </button>
-        <button className="icon-btn">
+        <button className="icon-btn" onClick={() => imageRef.current?.click()}>
           <Camera size={16} />
         </button>
+        <input
+          ref={imageRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={event => {
+            setStatusImage(event.target.files?.[0] || null);
+            setShowAddStatus(true);
+            event.target.value = '';
+          }}
+        />
       </div>
 
       {/* Statuts récents */}
@@ -214,7 +228,7 @@ export default function StatusView() {
               style={{ background: selectedBg }}
             >
               <p className="status-preview-text">
-                {newStatusText || 'Prévisualisation...'}
+                {statusImage ? statusImage.name : newStatusText || 'Prévisualisation...'}
               </p>
             </div>
 
@@ -246,7 +260,7 @@ export default function StatusView() {
               <button
                 className="btn-primary"
                 onClick={handleAddStatus}
-                disabled={!newStatusText.trim()}
+                disabled={!newStatusText.trim() && !statusImage}
               >
                 Publier
               </button>

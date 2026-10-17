@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, Search, Users, UserPlus, Check, Camera, ArrowRight, ChevronRight } from 'lucide-react';
+import { X, Search, Users, Check, Camera, ArrowRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 /* ─── Ligne contact réutilisable ─────────────────────────────── */
@@ -62,10 +62,6 @@ export default function NewChat() {
             <div className="quick-action-icon"><Users size={20} /></div>
             <span>Nouveau groupe</span>
           </button>
-          <button className="quick-action-list-btn">
-            <div className="quick-action-icon"><UserPlus size={20} /></div>
-            <span>Nouveau contact</span>
-          </button>
         </div>
 
         <div className="contacts-list">
@@ -85,17 +81,18 @@ export default function NewChat() {
 }
 
 /* ══════════════════════════════════════════════════════════
-   NOUVEAU GROUPE — 3 étapes comme WhatsApp
+   NOUVEAU GROUPE — sélection des participants en plusieurs étapes
    Étape 1 : sélection des participants
    Étape 2 : nom + photo du groupe
    Étape 3 : (création → ouvre la conv)
 ══════════════════════════════════════════════════════════ */
 export function NewGroup() {
-  const { contacts, setShowNewGroup, createGroup, getContact, currentUser } = useApp();
+  const { contacts, setShowNewGroup, createGroup, currentUser } = useApp();
   const [step, setStep] = useState(1);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState([]);   // tableau de contacts
   const [groupName, setGroupName] = useState('');
+  const [channelType, setChannelType] = useState('standard');
   const [groupAvatar, setGroupAvatar] = useState(null); // dataURL
   const fileRef = useRef(null);
 
@@ -122,7 +119,7 @@ export function NewGroup() {
 
   const handleCreate = () => {
     if (!groupName.trim() || selected.length === 0) return;
-    createGroup(groupName.trim(), selected.map((c) => c.id), groupAvatar);
+    createGroup(groupName.trim(), selected.map((c) => c.id), groupAvatar, channelType);
     setShowNewGroup(false);
   };
 
@@ -214,6 +211,21 @@ export function NewGroup() {
                 className="group-name-input"
               />
               <span className="group-name-count">{groupName.length}/25</span>
+            </div>
+            <div className="group-name-field">
+              <label htmlFor="group-type">Type d’espace</label>
+              <select
+                id="group-type"
+                className="group-name-input"
+                value={channelType}
+                onChange={event => setChannelType(event.target.value)}
+              >
+                <option value="standard">Groupe standard</option>
+                <option value="service">Groupe de service</option>
+                <option value="direction">Groupe de direction</option>
+                <option value="projet">Groupe de projet</option>
+                <option value="annonce">Canal d’annonce (admins uniquement)</option>
+              </select>
             </div>
 
             {/* Liste des participants */}

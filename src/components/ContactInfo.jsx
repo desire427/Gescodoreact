@@ -23,13 +23,35 @@ function ConfirmModal({ message, onConfirm, onCancel, danger = true }) {
   );
 }
 
+function SharedMediaList({ messages }) {
+  const shared = messages.filter(message => message.url);
+  if (!shared.length) return <p className="no-media">Aucun média partagé</p>;
+  return (
+    <div className="shared-media-list">
+      {shared.map(message => (
+        <a
+          key={message.id}
+          href={message.url}
+          target="_blank"
+          rel="noreferrer"
+          className="shared-media-item"
+        >
+          {message.type === 'image'
+            ? <img src={message.url} alt={message.attachment_name || 'Image partagée'} />
+            : <span>{message.attachment_name || message.type}</span>}
+        </a>
+      ))}
+    </div>
+  );
+}
+
 /* ─── Panneau : Infos groupe ─────────────────────────────────── */
 function GroupInfoPanel({ group, conv, onClose }) {
   const {
     currentUser, contacts, getContact,
     addGroupMember, removeGroupMember, leaveGroup, promoteToAdmin, demoteAdmin,
-    updateGroup, archiveConversation, deleteConversation,
-    toggleMute, addCall, activeConversationId,
+    updateGroup, archiveConversation,
+    toggleMute, activeConversationId, setShowSearch, getMessages,
   } = useApp();
 
   const [editingName, setEditingName] = useState(false);
@@ -42,9 +64,10 @@ function GroupInfoPanel({ group, conv, onClose }) {
   const [confirmModal, setConfirmModal] = useState(null);
   const fileRef = useRef(null);
 
-  const isAdmin = (group.admins || []).includes('me');
+  const isAdmin = (group.admins || []).some(id => String(id) === String(currentUser.id));
+  const sharedMessages = getMessages(activeConversationId);
   const members = (group.members || []).map((id) =>
-    id === 'me' ? currentUser : getContact(id)
+    String(id) === String(currentUser.id) ? currentUser : getContact(id)
   ).filter(Boolean);
 
   const nonMembers = contacts.filter(
@@ -80,7 +103,7 @@ function GroupInfoPanel({ group, conv, onClose }) {
 
   const handleMakeAdmin = (contactId) => {
     const ct = getContact(contactId);
-    const isAlreadyAdmin = (group.admins || []).includes(contactId);
+    const isAlreadyAdmin = (group.admins || []).some(id => String(id) === String(contactId));
     setConfirmModal({
       message: isAlreadyAdmin
         ? `Retirer les droits d'admin à ${ct?.name} ?`
@@ -95,9 +118,9 @@ function GroupInfoPanel({ group, conv, onClose }) {
   };
 
   const MemberRow = ({ member, memberId }) => {
-    const memberIsAdmin = (group.admins || []).includes(memberId);
+    const memberIsAdmin = (group.admins || []).some(id => String(id) === String(memberId));
     const [showMenu, setShowMenu] = useState(false);
-    const isMe = memberId === 'me';
+    const isMe = String(memberId) === String(currentUser.id);
     const src = member.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(member.name)}&backgroundColor=128C7E`;
 
     return (
@@ -176,17 +199,11 @@ function GroupInfoPanel({ group, conv, onClose }) {
 
         {/* Actions rapides */}
         <div className="contact-quick-actions">
-          <button className="quick-action-btn" onClick={() => addCall(group.id, 'voice', 'outgoing')}>
-            <Phone size={20} /><span>Appel</span>
-          </button>
-          <button className="quick-action-btn" onClick={() => addCall(group.id, 'video', 'outgoing')}>
-            <Video size={20} /><span>Vidéo</span>
-          </button>
           <button className="quick-action-btn" onClick={() => toggleMute(activeConversationId)}>
             {conv?.muted ? <Bell size={20} /> : <BellOff size={20} />}
             <span>{conv?.muted ? 'Activer' : 'Sourdine'}</span>
           </button>
-          <button className="quick-action-btn"><Search size={20} /><span>Rechercher</span></button>
+          <button className="quick-action-btn" onClick={() => setShowSearch(true)}><Search size={20} /><span>Rechercher</span></button>
         </div>
 
         {/* Description du groupe */}
@@ -236,7 +253,7 @@ function GroupInfoPanel({ group, conv, onClose }) {
             <span>Médias, liens et documents</span>
             {showMedia ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-          {showMedia && <p className="no-media">Aucun média partagé</p>}
+          {showMedia && <SharedMediaList messages={sharedMessages} />}
         </div>
 
         {/* Membres */}
@@ -282,7 +299,7 @@ function GroupInfoPanel({ group, conv, onClose }) {
 
           {/* Liste des membres */}
           {members.map((member) => {
-            const memberId = member.id === currentUser.id ? 'me' : member.id;
+            const memberId = member.id;
             return <MemberRow key={memberId} member={member} memberId={memberId} />;
           })}
         </div>
@@ -319,7 +336,8 @@ function GroupInfoPanel({ group, conv, onClose }) {
 function ContactInfoPanel({ contact, conv, onClose }) {
   const {
     activeConversationId, toggleMute, archiveConversation,
-    deleteConversation, addCall, blockContact, isBlocked,
+    deleteConversation, addCall, blockContact, isBlocked, setShowSearch,
+    setMessagingError, getMessages, allConversations, openConversation, setShowContactInfo,
   } = useApp();
 
   const [showMedia, setShowMedia] = useState(false);
@@ -327,6 +345,11 @@ function ContactInfoPanel({ contact, conv, onClose }) {
   const [confirmModal, setConfirmModal] = useState(null);
 
   const blocked = isBlocked(contact.id);
+  const sharedMessages = getMessages(activeConversationId);
+  const commonGroups = allConversations.filter(conversation =>
+    conversation.isGroup
+    && conversation.members.some(memberId => String(memberId) === String(contact.id))
+  );
 
   const getLastSeen = () => {
     if (contact.online) return 'En ligne';
@@ -367,7 +390,7 @@ function ContactInfoPanel({ contact, conv, onClose }) {
           <button className="quick-action-btn" onClick={() => addCall(contact.id, 'video', 'outgoing')}>
             <Video size={20} /><span>Vidéo</span>
           </button>
-          <button className="quick-action-btn"><Search size={20} /><span>Rechercher</span></button>
+          <button className="quick-action-btn" onClick={() => setShowSearch(true)}><Search size={20} /><span>Rechercher</span></button>
           <button className="quick-action-btn" onClick={() => toggleMute(activeConversationId)}>
             {conv?.muted ? <Bell size={20} /> : <BellOff size={20} />}
             <span>{conv?.muted ? 'Activer' : 'Sourdine'}</span>
@@ -392,7 +415,7 @@ function ContactInfoPanel({ contact, conv, onClose }) {
             <span>Médias, liens et documents</span>
             {showMedia ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-          {showMedia && <p className="no-media">Aucun média partagé</p>}
+          {showMedia && <SharedMediaList messages={sharedMessages} />}
         </div>
 
         {/* Groupes en commun */}
@@ -401,15 +424,25 @@ function ContactInfoPanel({ contact, conv, onClose }) {
             <Users size={15} /><span>Groupes en commun</span>
             {showGroups ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-          {showGroups && <p className="no-media">Aucun groupe en commun</p>}
+          {showGroups && (commonGroups.length
+            ? commonGroups.map(group => (
+                <button
+                  key={group.id}
+                  className="contact-row"
+                  onClick={() => {
+                    openConversation(group.id);
+                    setShowContactInfo(false);
+                  }}
+                >
+                  <span className="contact-row-name">{group.name}</span>
+                </button>
+              ))
+            : <p className="no-media">Aucun groupe en commun</p>)}
         </div>
 
         {/* Actions danger — CONTACT INDIVIDUEL */}
         <div className="info-section danger-section">
-          <button className="danger-action-btn" onClick={() => setConfirmModal({
-            message: `Signaler ${contact.name} ?\n\nLes 5 derniers messages seront transmis à WhatsApp.`,
-            onConfirm: () => setConfirmModal(null),
-          })}>
+          <button className="danger-action-btn" onClick={() => setMessagingError('Le signalement des contacts n’est pas encore disponible.')}>
             <ThumbsDown size={16} /><span>Signaler {contact.name}</span>
           </button>
           <button className="danger-action-btn" onClick={() => setConfirmModal({

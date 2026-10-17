@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Plus, X, Check, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { companies as allCompanies, departments } from '../data/mockData';
 
 const MEETING_TYPES = [
   { id: 'direction',   label: 'Direction' },
@@ -23,10 +22,11 @@ export default function MeetingCreateModal({ onClose, onSave }) {
     agenda: [{ id: `ag_${Date.now()}`, title: '', done: false, notes: '' }],
   });
   const [newAgendaItem, setNewAgendaItem] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Participants : on utilise les contacts disponibles (messagerie)
   const availableParticipants = contacts.filter(c => !c.isGroup);
-  const depts = departments.filter(d => d.companyId === form.companyId);
 
   const toggleParticipant = (id) => {
     setForm(p => ({
@@ -48,13 +48,19 @@ export default function MeetingCreateModal({ onClose, onSave }) {
 
   const removeAgendaItem = (id) => setForm(p => ({ ...p, agenda: p.agenda.filter(a => a.id !== id) }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.scheduledAt) return;
-    onSave({
-      ...form,
-      agenda: form.agenda.filter(a => a.title.trim()),
-    });
+    setSaving(true);
+    setError('');
+    try {
+      await onSave({ ...form, agenda: form.agenda.filter(a => a.title.trim()) });
+    } catch (cause) {
+      const detail = cause?.response?.data;
+      setError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : cause?.message || 'La réunion n’a pas pu être créée.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const f = (key, val) => setForm(p => ({ ...p, [key]: val }));
@@ -182,10 +188,11 @@ export default function MeetingCreateModal({ onClose, onSave }) {
           </div>
 
           {/* Footer */}
+          {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
           <div className="meeting-modal-footer">
             <button type="button" className="btn-ghost" onClick={onClose}>Annuler</button>
-            <button type="submit" className="btn-primary-meeting">
-              <Check size={15} /> Créer et inviter
+            <button type="submit" className="btn-primary-meeting" disabled={saving}>
+              <Check size={15} /> {saving ? 'Création…' : 'Créer et inviter'}
             </button>
           </div>
         </form>

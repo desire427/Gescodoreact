@@ -1,4 +1,5 @@
-import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneCall, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneCall } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { format, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -54,6 +55,7 @@ function CallItem({ call, contact, onCall }) {
 
 export default function CallsView() {
   const { calls, contacts, addCall, createConversation } = useApp();
+  const [showDialer, setShowDialer] = useState(false);
 
   const getContact = (id) => contacts.find((c) => c.id === id);
 
@@ -83,15 +85,49 @@ export default function CallsView() {
   return (
     <div className="calls-view">
       <div className="calls-actions-row">
-        <button className="new-call-btn">
+        <button className="new-call-btn" onClick={() => setShowDialer(true)}>
           <PhoneCall size={16} />
           <span>Nouvel appel</span>
         </button>
-        <button className="new-call-btn">
-          <Plus size={16} />
-          <span>Créer un lien d'appel</span>
-        </button>
       </div>
+
+      {showDialer && (
+        <div className="modal-overlay" onClick={() => setShowDialer(false)}>
+          <div className="modal" onClick={event => event.stopPropagation()}>
+            <div className="modal-header">
+              <span>Nouvel appel 1 à 1</span>
+              <button className="icon-btn" onClick={() => setShowDialer(false)}>×</button>
+            </div>
+            <div className="contacts-list">
+              {contacts.map(contact => (
+                <div className="contact-row" key={contact.id}>
+                  <img
+                    src={contact.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(contact.name)}`}
+                    alt=""
+                    className="avatar avatar-sm"
+                  />
+                  <span className="contact-row-name">{contact.name}</span>
+                  <button
+                    className="icon-btn"
+                    title="Appel audio"
+                    onClick={() => { addCall(contact.id, 'voice'); setShowDialer(false); }}
+                  >
+                    <Phone size={18} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    title="Appel vidéo"
+                    onClick={() => { addCall(contact.id, 'video'); setShowDialer(false); }}
+                  >
+                    <Video size={18} />
+                  </button>
+                </div>
+              ))}
+              {contacts.length === 0 && <p className="empty-state">Aucun contact disponible</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="calls-list">
         {grouped.map((item) =>

@@ -6,68 +6,61 @@ import { fr } from 'date-fns/locale';
 import { ConfirmModal } from './Companies';
 
 function DeviceIcon({ type }) {
-  return type === 'mobile'
-    ? <Smartphone size={16} />
-    : <Monitor size={16} />;
+  return type === 'mobile' ? <Smartphone size={15} /> : <Monitor size={15} />;
 }
 
 function SessionRow({ session, user, onRevoke }) {
   const [confirm, setConfirm] = useState(false);
-  const device = user?.devices?.find(d => d.id === session.deviceId);
+  const deviceId = session.deviceId ?? session.device;
+  const device   = user?.devices?.find(d => d.id === deviceId);
+  const isActive = session.active ?? session.is_active ?? false;
 
   return (
     <>
-      <tr className={`sa-table-row ${!session.active ? 'sa-row--inactive' : ''}`}>
+      <tr className={`gc-table-row ${!isActive ? 'gc-table-row--dimmed' : ''}`}>
         <td>
-          <div className="sa-user-cell">
-            <div className="sa-user-avatar-wrap">
-              <img src={user?.avatar} alt={user?.name} className="sa-avatar-sm" />
-              {user?.online && <span className="sa-online-dot" />}
+          <div className="gc-user-cell">
+            <div className="gc-user-avatar-wrap">
+              <img src={user?.avatar} alt={user?.name} className="gc-user-avatar" />
+              {user?.online && <span className="gc-online-dot" />}
             </div>
             <div>
-              <div className="sa-user-name">{user?.name || '—'}</div>
-              <div className="sa-user-email">{user?.email || '—'}</div>
+              <div className="gc-user-name">{user?.name || '—'}</div>
+              <div className="gc-user-email">{user?.email || '—'}</div>
             </div>
           </div>
         </td>
         <td>
-          <div className="sa-device-cell">
-            <div className="sa-device-icon">
-              <DeviceIcon type={device?.type || 'web'} />
-            </div>
+          <div className="gc-device-cell">
+            <div className="gc-device-icon-sm"><DeviceIcon type={device?.type || 'web'} /></div>
             <div>
-              <div className="sa-device-label">{device?.label || 'Appareil inconnu'}</div>
-              <div className="sa-device-os">{device?.os || '—'}</div>
+              <div className="gc-user-name">{device?.label || 'Appareil inconnu'}</div>
+              <div className="gc-table-sub">{device?.os || '—'}</div>
             </div>
           </div>
         </td>
-        <td className="sa-table-sub">{session.ip}</td>
-        <td className="sa-table-sub">{session.location}</td>
-        <td className="sa-table-sub">
-          {format(new Date(session.startedAt), 'd MMM HH:mm', { locale: fr })}
+        <td className="gc-table-sub">{session.ip || session.ip_address || '—'}</td>
+        <td className="gc-table-sub">{session.location || '—'}</td>
+        <td className="gc-table-sub">
+          {session.startedAt || session.created_at
+            ? format(new Date(session.startedAt ?? session.created_at), 'd MMM HH:mm', { locale: fr })
+            : '—'}
         </td>
-        <td className="sa-table-sub">
-          {format(new Date(session.lastActivity), 'd MMM HH:mm', { locale: fr })}
-        </td>
-        <td>
-          {session.active ? (
-            <span className="sa-badge sa-badge--green">
-              <Wifi size={11} /> Active
-            </span>
-          ) : (
-            <span className="sa-badge sa-badge--gray">
-              <WifiOff size={11} /> Fermée
-            </span>
-          )}
+        <td className="gc-table-sub">
+          {session.lastActivity || session.startedAt || session.created_at
+            ? format(new Date(session.lastActivity ?? session.startedAt ?? session.created_at), 'd MMM HH:mm', { locale: fr })
+            : '—'}
         </td>
         <td>
-          {session.active && (
-            <button
-              className="sa-btn sa-btn--danger sa-btn--sm"
-              onClick={() => setConfirm(true)}
-              title="Révoquer cette session"
-            >
-              <LogOut size={13} /> Révoquer
+          {isActive
+            ? <span className="gc-badge gc-badge--success"><Wifi size={10} /> Active</span>
+            : <span className="gc-badge gc-badge--muted"><WifiOff size={10} /> Fermée</span>
+          }
+        </td>
+        <td>
+          {isActive && (
+            <button className="gc-btn gc-btn--danger" style={{ fontSize: 12, padding: '5px 10px' }} onClick={() => setConfirm(true)}>
+              <LogOut size={12} /> Révoquer
             </button>
           )}
         </td>
@@ -86,106 +79,109 @@ function SessionRow({ session, user, onRevoke }) {
 
 export default function SessionsDevices() {
   const { sessions, users, revokeSession, revokeAllUserSessions } = useSuperAdmin();
-  const [search, setSearch]     = useState('');
-  const [filterActive, setFilterActive] = useState('all');
+  const [search,         setSearch]       = useState('');
+  const [filterActive,   setFilterActive] = useState('all');
   const [confirmRevokeAll, setConfirmRevokeAll] = useState(null);
 
-  const activeSessions = sessions.filter(s => {
-    const user = users.find(u => u.id === s.userId);
-    const q = search.toLowerCase();
-    const matchSearch =
-      (user?.name || '').toLowerCase().includes(q) ||
-      s.ip.includes(q) ||
-      (s.location || '').toLowerCase().includes(q);
-    const matchFilter =
-      filterActive === 'all' ||
-      (filterActive === 'active' && s.active) ||
-      (filterActive === 'inactive' && !s.active);
-    return matchSearch && matchFilter;
+  const filtered = sessions.filter(s => {
+    const user    = users.find(u => u.id === (s.userId ?? s.user));
+    const q       = search.toLowerCase();
+    const isActive = s.active ?? s.is_active ?? false;
+    return (
+      ((user?.name || '').toLowerCase().includes(q) ||
+       (s.ip || s.ip_address || '').includes(q) ||
+       (s.location || '').toLowerCase().includes(q)) &&
+      (filterActive === 'all' ||
+       (filterActive === 'active'   &&  isActive) ||
+       (filterActive === 'inactive' && !isActive))
+    );
   });
 
-  // Utilisateurs avec sessions actives groupés
-  const usersWithActiveSessions = users.filter(u => u.sessions?.length > 0);
+  const activeSessions        = sessions.filter(s => s.active ?? s.is_active ?? false);
+  const totalDevices          = users.reduce((sum, u) => sum + (u.devices?.length || 0), 0);
+  const usersWithActiveSessions = users.filter(u =>
+    sessions.some(s => (s.userId ?? s.user) === u.id && (s.active ?? s.is_active ?? false))
+  );
+
+  const FILTERS = [
+    { id: 'all', label: 'Toutes' }, { id: 'active', label: 'Actives' }, { id: 'inactive', label: 'Fermées' },
+  ];
 
   return (
-    <div className="sa-page">
-
-      {/* Résumé */}
-      <div className="sa-kpi-grid sa-kpi-grid--sm" style={{ marginBottom: '1.5rem' }}>
-        <div className="sa-kpi-card" style={{ '--kpi-color': '#059669' }}>
-          <div className="sa-kpi-icon"><Wifi size={20} /></div>
-          <div className="sa-kpi-body">
-            <span className="sa-kpi-value">{sessions.filter(s => s.active).length}</span>
-            <span className="sa-kpi-label">Sessions actives</span>
+    <div className="gc-page">
+      {/* KPIs */}
+      <div className="gc-kpi-grid">
+        <div className="gc-kpi-card" style={{ '--kpi-accent': '#059669' }}>
+          <div className="gc-kpi-icon"><Wifi size={19} /></div>
+          <div className="gc-kpi-body">
+            <span className="gc-kpi-value">{activeSessions.length}</span>
+            <span className="gc-kpi-label">Sessions actives</span>
           </div>
         </div>
-        <div className="sa-kpi-card" style={{ '--kpi-color': '#2563eb' }}>
-          <div className="sa-kpi-icon"><Smartphone size={20} /></div>
-          <div className="sa-kpi-body">
-            <span className="sa-kpi-value">{users.reduce((sum, u) => sum + (u.devices?.length || 0), 0)}</span>
-            <span className="sa-kpi-label">Appareils enregistrés</span>
+        <div className="gc-kpi-card" style={{ '--kpi-accent': '#2563eb' }}>
+          <div className="gc-kpi-icon"><Smartphone size={19} /></div>
+          <div className="gc-kpi-body">
+            <span className="gc-kpi-value">{totalDevices}</span>
+            <span className="gc-kpi-label">Appareils enregistrés</span>
           </div>
         </div>
-        <div className="sa-kpi-card" style={{ '--kpi-color': '#dc2626' }}>
-          <div className="sa-kpi-icon"><Shield size={20} /></div>
-          <div className="sa-kpi-body">
-            <span className="sa-kpi-value">{usersWithActiveSessions.length}</span>
-            <span className="sa-kpi-label">Utilisateurs connectés</span>
+        <div className="gc-kpi-card" style={{ '--kpi-accent': '#dc2626' }}>
+          <div className="gc-kpi-icon"><Shield size={19} /></div>
+          <div className="gc-kpi-body">
+            <span className="gc-kpi-value">{usersWithActiveSessions.length}</span>
+            <span className="gc-kpi-label">Utilisateurs connectés</span>
           </div>
         </div>
       </div>
 
-      {/* Actions globales */}
+      {/* Déconnexion par utilisateur */}
       {usersWithActiveSessions.length > 0 && (
-        <section className="sa-section sa-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="sa-card-header">
-            <h3 className="sa-card-title"><Shield size={15} />Déconnexion par utilisateur</h3>
+        <section className="gc-section gc-card">
+          <div className="gc-card-header">
+            <h3 className="gc-card-title"><Shield size={15} />Déconnexion par utilisateur</h3>
           </div>
-          <div className="sa-bulk-sessions">
-            {usersWithActiveSessions.map(u => (
-              <div key={u.id} className="sa-bulk-session-row">
-                <div className="sa-user-cell">
-                  <div className="sa-user-avatar-wrap">
-                    <img src={u.avatar} alt={u.name} className="sa-avatar-sm" />
-                    {u.online && <span className="sa-online-dot" />}
+          <div className="gc-bulk-sessions">
+            {usersWithActiveSessions.map(u => {
+              const count = sessions.filter(s => (s.userId ?? s.user) === u.id && (s.active ?? s.is_active ?? false)).length;
+              return (
+                <div key={u.id} className="gc-bulk-row">
+                  <div className="gc-user-cell">
+                    <div className="gc-user-avatar-wrap">
+                      <img src={u.avatar} alt={u.name} className="gc-user-avatar" />
+                      {u.online && <span className="gc-online-dot" />}
+                    </div>
+                    <div>
+                      <div className="gc-user-name">{u.name}</div>
+                      <div className="gc-table-sub">{count} session{count > 1 ? 's' : ''} active{count > 1 ? 's' : ''}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="sa-user-name">{u.name}</div>
-                    <div className="sa-user-email">{u.sessions.length} session{u.sessions.length > 1 ? 's' : ''} active{u.sessions.length > 1 ? 's' : ''}</div>
-                  </div>
+                  <button className="gc-btn gc-btn--danger" style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => setConfirmRevokeAll(u)}>
+                    <LogOut size={12} /> Tout déconnecter
+                  </button>
                 </div>
-                <button
-                  className="sa-btn sa-btn--danger sa-btn--sm"
-                  onClick={() => setConfirmRevokeAll(u)}
-                >
-                  <LogOut size={13} /> Tout déconnecter
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
 
-      {/* Tableau des sessions */}
-      <div className="sa-toolbar">
-        <div className="sa-search-wrap">
-          <Search size={15} className="sa-search-icon" />
-          <input
-            className="sa-search-input"
-            placeholder="Utilisateur, IP, localisation…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      {/* Toolbar */}
+      <div className="gc-toolbar">
+        <div className="gc-search-wrap">
+          <Search size={14} className="gc-search-icon" />
+          <input className="gc-search-input" placeholder="Utilisateur, IP, localisation…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div className="sa-filter-tabs">
-          <button className={`sa-filter-tab ${filterActive === 'all' ? 'active' : ''}`} onClick={() => setFilterActive('all')}>Toutes</button>
-          <button className={`sa-filter-tab ${filterActive === 'active' ? 'active' : ''}`} onClick={() => setFilterActive('active')}>Actives</button>
-          <button className={`sa-filter-tab ${filterActive === 'inactive' ? 'active' : ''}`} onClick={() => setFilterActive('inactive')}>Fermées</button>
+        <div className="gc-filter-pills">
+          {FILTERS.map(f => (
+            <button key={f.id} className={`gc-filter-pill ${filterActive === f.id ? 'gc-filter-pill--active' : ''}`} onClick={() => setFilterActive(f.id)}>
+              {f.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="sa-table-wrap">
-        <table className="sa-table">
+      <div className="gc-table-wrap">
+        <table className="gc-table">
           <thead>
             <tr>
               <th>Utilisateur</th>
@@ -199,14 +195,12 @@ export default function SessionsDevices() {
             </tr>
           </thead>
           <tbody>
-            {activeSessions.length === 0 && (
-              <tr><td colSpan={8} className="sa-table-empty">Aucune session trouvée.</td></tr>
-            )}
-            {activeSessions.map(s => (
+            {filtered.length === 0 && <tr><td colSpan={8} className="gc-table-empty">Aucune session trouvée.</td></tr>}
+            {filtered.map(s => (
               <SessionRow
                 key={s.id}
                 session={s}
-                user={users.find(u => u.id === s.userId)}
+                user={users.find(u => u.id === (s.userId ?? s.user))}
                 onRevoke={revokeSession}
               />
             ))}

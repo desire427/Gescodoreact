@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, Users, FolderKanban, CalendarDays,
   Gavel, ListTodo, BookOpen, MessageSquare,
-  LogOut, Bell, ChevronRight, Menu, X, Building2,
+  LogOut, Bell, ChevronRight, Menu, X, Building2, ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAdminSociete } from '../../context/AdminSocieteContext';
@@ -12,7 +12,7 @@ import Projects from '../superadmin/Projects';
 import AuditLog from '../superadmin/AuditLog';
 import Meetings from '../superadmin/Meetings';
 
-// Modules propres à l'Admin Société / DG
+// Modules de l'Administrateur Société, réunissant les responsabilités de direction.
 import DashboardDG from './DashboardDG';
 import DecisionsModule from './DecisionsModule';
 import TasksModule from './TasksModule';
@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { id: 'audit',      label: 'Journal d\'audit',   icon: BookOpen },
 ];
 
-export default function AdminSocieteLayout() {
+export default function AdminSocieteLayout({ superAdminPreview = false, onExitPreview }) {
   const { currentUser, goToLogin, openMessaging } = useAuth();
   const { company, stats }                         = useAdminSociete();
   const [activeSection, setActiveSection]          = useState('dashboard');
@@ -51,21 +51,16 @@ export default function AdminSocieteLayout() {
 
   return (
     <div className="sa-root">
-      {/* ── Sidebar ── */}
       <aside className={`sa-sidebar ${sidebarOpen ? 'sa-sidebar--open' : ''}`}>
-        {/* Brand */}
         <div className="sa-brand">
-          <div className="sa-brand-icon" style={{ background: 'linear-gradient(135deg,#2563eb,#0891b2)' }}>
-            <Building2 size={22} />
-          </div>
+          <div className="sa-brand-mark" aria-hidden="true"><span>G</span></div>
           <div className="sa-brand-text">
-            <span className="sa-brand-name">{company?.name || 'KAB'}</span>
-            <span className="sa-brand-role" style={{ color: '#2563eb' }}>Admin Société / DG</span>
+            <span className="sa-brand-name">GESCODO</span>
+            <span className="sa-brand-role">Espace de pilotage</span>
           </div>
           <button className="sa-sidebar-close" onClick={() => setSidebarOpen(false)}><X size={18} /></button>
         </div>
-
-        {/* Navigation */}
+        <div className="sa-workspace-label"><Building2 size={14} /> {company?.name || 'Mon organisation'}</div>
         <nav className="sa-nav">
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
@@ -82,7 +77,7 @@ export default function AdminSocieteLayout() {
                   <span className="sa-nav-badge">{stats.submittedTasks}</span>
                 )}
                 {item.id === 'decisions' && stats.pendingDecisions > 0 && (
-                  <span className="sa-nav-badge" style={{ background: '#f59e0b' }}>{stats.pendingDecisions}</span>
+                  <span className="sa-nav-badge">{stats.pendingDecisions}</span>
                 )}
                 {isActive && <ChevronRight size={14} className="sa-nav-chevron" />}
               </button>
@@ -90,7 +85,6 @@ export default function AdminSocieteLayout() {
           })}
         </nav>
 
-        {/* Séparateur + Discussions */}
         <div className="sa-nav-divider" />
         <div className="sa-nav sa-nav--bottom">
           <button
@@ -99,7 +93,7 @@ export default function AdminSocieteLayout() {
           >
             <MessageSquare size={18} className="sa-nav-icon" />
             <span className="sa-nav-label">Discussions</span>
-            <span className="sa-nav-tag">Messagerie</span>
+            <span className="sa-nav-tag">Ouvrir</span>
           </button>
         </div>
 
@@ -109,25 +103,28 @@ export default function AdminSocieteLayout() {
             <img src={currentUser?.avatar} alt={currentUser?.name} className="sa-avatar-sm" />
             <div className="sa-sidebar-user-info">
               <span className="sa-sidebar-user-name">{currentUser?.name}</span>
-              <span className="sa-sidebar-user-role" style={{ color: '#2563eb' }}>Admin Société / DG</span>
+              <span className="sa-sidebar-user-role">{superAdminPreview ? 'Vue superadmin' : 'Administrateur Société'}</span>
             </div>
           </div>
-          <button className="sa-logout-btn" onClick={goToLogin} title="Se déconnecter">
-            <LogOut size={16} />
+          <button className="sa-logout-btn" onClick={superAdminPreview ? onExitPreview : goToLogin} title={superAdminPreview ? 'Retour à la console superadmin' : 'Se déconnecter'}>
+            {superAdminPreview ? <ArrowLeft size={16} /> : <LogOut size={16} />}
           </button>
         </div>
       </aside>
 
       {sidebarOpen && <div className="sa-sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
-      {/* ── Main ── */}
       <div className="sa-main">
         <header className="sa-topbar">
           <button className="sa-menu-btn" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button>
-          <div className="sa-topbar-title">
-            {NAV_ITEMS.find(n => n.id === activeSection)?.label || 'Tableau de bord'}
+          <div className="sa-topbar-heading">
+            <span className="sa-topbar-context">{company?.name || 'Organisation'}</span>
+            <div className="sa-topbar-title">
+              {NAV_ITEMS.find(n => n.id === activeSection)?.label || 'Tableau de bord'}
+            </div>
           </div>
           <div className="sa-topbar-actions">
+            {superAdminPreview && <button className="sa-btn sa-btn--ghost" onClick={onExitPreview}><ArrowLeft size={15} /> Retour superadmin</button>}
             <div className="sa-topbar-stats">
               <span className="sa-topbar-stat"><span className="dot dot--green" />{stats.onlineUsers} en ligne</span>
               <span className="sa-topbar-stat"><span className="dot dot--blue" />{stats.activeSessions} sessions</span>
@@ -141,7 +138,10 @@ export default function AdminSocieteLayout() {
             <button className="sa-topbar-msg-btn" onClick={openMessaging} title="Messagerie">
               <MessageSquare size={18} />
             </button>
-            <img src={currentUser?.avatar} alt="" className="sa-avatar-sm sa-topbar-avatar" />
+            <div className="sa-topbar-profile">
+              <img src={currentUser?.avatar} alt="" className="sa-avatar-sm sa-topbar-avatar" />
+              <span>{currentUser?.name}</span>
+            </div>
           </div>
         </header>
         <main className="sa-content">{renderSection()}</main>

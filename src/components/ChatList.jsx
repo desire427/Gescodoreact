@@ -32,10 +32,10 @@ function MessageStatus({ status, isMine }) {
 }
 
 function ConvItem({ conv, contact, onOpen, onContextMenu }) {
-  const { activeConversationId } = useApp();
+  const { activeConversationId, currentUser } = useApp();
   const isActive = activeConversationId === conv.id;
   const lastMsg = conv.lastMessage;
-  const isMine = lastMsg?.senderId === 'me';
+  const isMine = String(lastMsg?.senderId) === String(currentUser.id);
 
   const getLastMsgPreview = () => {
     if (!lastMsg) return 'Démarrer une conversation...';

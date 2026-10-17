@@ -6,13 +6,23 @@
 import { useState } from 'react';
 import {
   Search, Plus, Filter, X, Check, UserCheck, UserX, UserMinus,
-  LogOut, Eye, ChevronDown, AlertTriangle, ArrowRightLeft,
+  LogOut, Eye, ChevronDown, ArrowRightLeft,
   Smartphone, Monitor, CheckCircle, XCircle, ClipboardList,
 } from 'lucide-react';
 import { useAdminSociete } from '../../context/AdminSocieteContext';
-import { roles } from '../../data/mockData';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+// Rôles statiques (référentiel stable, identique aux autres composants)
+const roles = [
+  { id: 'superAdmin',   label: 'Super Administrateur',    color: '#7c3aed' },
+  { id: 'adminSociete', label: 'Administrateur Société',  color: '#2563eb' },
+  { id: 'manager',      label: 'Directeur / Manager',       color: '#059669' },
+  { id: 'rh',           label: 'Ressources Humaines',       color: '#d97706' },
+  { id: 'chefProjet',   label: 'Chef de Projet',            color: '#0891b2' },
+  { id: 'auditeur',     label: 'Auditeur',                  color: '#7c3aed' },
+  { id: 'employe',      label: 'Employé',                   color: '#475569' },
+];
 
 const STATUS_INFO = {
   active:    { label: 'Actif',    class: 'sa-badge--green'  },
@@ -41,15 +51,30 @@ function ConfirmModal({ message, confirmLabel, onConfirm, onClose }) {
   );
 }
 
-function UserModal({ user, depts, users: allUsers, onClose, onSave }) {
+function UserModal({ user, depts, onClose, onSave }) {
   // Admin Société ne peut pas créer de superAdmin
-  const allowedRoles = roles.filter(r => r.id !== 'superAdmin');
+  const allowedRoles = roles.filter(r => !['superAdmin', 'adminSociete'].includes(r.id));
   const [form, setForm] = useState({
     name: user?.name||'', email: user?.email||'', phone: user?.phone||'',
     matricule: user?.matricule||'', role: user?.role||'employe',
-    departmentId: user?.departmentId||'', about: user?.about||'',
+    departmentId: user?.departmentId||'', about: user?.about||'', password: '',
   });
-  const handleSubmit = (e) => { e.preventDefault(); if (!form.name.trim()||!form.email.trim()) return; onSave(form); };
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()||!form.email.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(form);
+    } catch (saveError) {
+      const detail = saveError.response?.data?.detail || saveError.response?.data;
+      setError(typeof detail === 'string' ? detail : JSON.stringify(detail || 'Création impossible.'));
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="sa-modal-overlay" onClick={onClose}>
       <div className="sa-modal sa-modal--lg" onClick={e=>e.stopPropagation()}>
@@ -76,10 +101,12 @@ function UserModal({ user, depts, users: allUsers, onClose, onSave }) {
               </select>
             </div>
           </div>
+          {!user && <div className="sa-form-field"><label>Mot de passe initial *</label><input type="password" value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} minLength={8} autoComplete="new-password" required/></div>}
           <div className="sa-form-field"><label>À propos</label><input value={form.about} onChange={e=>setForm(p=>({...p,about:e.target.value}))} maxLength={80}/></div>
+          {error && <p role="alert" style={{color:'#b91c1c'}}>{error}</p>}
           <div className="sa-modal-footer">
             <button type="button" className="sa-btn sa-btn--ghost" onClick={onClose}>Annuler</button>
-            <button type="submit" className="sa-btn sa-btn--primary"><Check size={15}/> {user?'Enregistrer':'Inviter'}</button>
+            <button type="submit" className="sa-btn sa-btn--primary" disabled={saving}><Check size={15}/> {saving?'Création…':user?'Enregistrer':'Inviter'}</button>
           </div>
         </form>
       </div>
@@ -150,7 +177,7 @@ function UserDetail({ user, onClose }) {
               <div className="sa-detail-section">
                 <span className="sa-detail-section-title">Changer le rôle</span>
                 <div className="sa-role-select-list">
-                  {roles.filter(r=>r.id!=='superAdmin').map(r=>(
+                  {roles.filter(r=>!['superAdmin','adminSociete'].includes(r.id)).map(r=>(
                     <button key={r.id} className={`sa-role-select-item ${user.role===r.id?'active':''}`} style={{ '--role-color':r.color }} onClick={()=>changeUserRole(user.id,r.id)}>
                       <span className="sa-role-dot" style={{ background:r.color }}/>{r.label}{user.role===r.id&&<Check size={13}/>}
                     </button>
@@ -242,7 +269,7 @@ function UserDetail({ user, onClose }) {
 }
 
 export default function UsersManagementAS() {
-  const { users, createUser, companyDepts } = useAdminSociete();
+  const { users, createUser, departments: companyDepts } = useAdminSociete();
   const [search, setSearch]             = useState('');
   const [filterRole, setFilterRole]     = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -276,7 +303,7 @@ export default function UsersManagementAS() {
           <div className="sa-filter-group"><label>Rôle</label>
             <select value={filterRole} onChange={e=>setFilterRole(e.target.value)}>
               <option value="all">Tous</option>
-              {roles.filter(r=>r.id!=='superAdmin').map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+              {roles.filter(r=>!['superAdmin','adminSociete'].includes(r.id)).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
             </select>
           </div>
           <div className="sa-filter-group"><label>Statut</label>
@@ -321,7 +348,7 @@ export default function UsersManagementAS() {
           </tbody>
         </table>
       </div>
-      {modal?.type==='create'&&<UserModal user={null} depts={companyDepts} users={users} onClose={()=>setModal(null)} onSave={(form)=>{createUser(form);setModal(null);}}/>}
+      {modal?.type==='create'&&<UserModal user={null} depts={companyDepts} onClose={()=>setModal(null)} onSave={async (form)=>{await createUser(form);setModal(null);}}/>}
       {selectedUser&&<UserDetail user={users.find(u=>u.id===selectedUser.id)||selectedUser} onClose={()=>setSelectedUser(null)}/>}
     </div>
   );

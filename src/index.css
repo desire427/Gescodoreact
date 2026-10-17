@@ -1,4 +1,4 @@
-/* Styles de base — tout le CSS WhatsApp est dans App.css */
+/* Styles de base de la plateforme */
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
 #root { height: 100%; }
